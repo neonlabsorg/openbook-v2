@@ -51,7 +51,7 @@ async function placeOrder() {
         maxBaseLots: uiBaseToLots(market, 10),  // Buying 10 base tokens
         maxQuoteLotsIncludingFees: uiQuoteToLots(market, 350),  // Max $350 spend
         clientOrderId: new anchor.BN(Date.now()),
-        orderType: PlaceOrderTypeUtils.ImmediateOrCancel,  // Execute immediately
+        orderType: PlaceOrderTypeUtils.Market,
         expiryTimestamp: new anchor.BN(0),
         selfTradeBehavior: SelfTradeBehaviorUtils.DecrementTake,
         limit: 255
