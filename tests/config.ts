@@ -4,10 +4,10 @@ const config = {
     RPC: "https://api.devnet.solana.com",
     accounts: {
         programId: "4euFSfDacDh7XauCX1mQ6dxyS48WFoykMTLVsWfjSncz",
-        market: "J4poCDHBeSuQVnApXYrGBsm9niJbCg8WCRNgvU3kdPZe",
-        quoteMint: "7KestsAnwRKCKDTBwEE5h1d4gC2vQZdHpf3S94FitNcX",
-        baseMint: "6X25RMXNM91TuTGLrij63ojbCBJ18ANnu43vHks1QL3Z",
-        openOrders: "5f9XZ2GvGrAWkjHwavBhacBR5eGmdS1unkabmivDJZE9"
+        market: "6R3ydQjmYqkPN6FkrbCUY3fZSFficYMjDEKzJsGBKPBy",
+        quoteMint: "5Y45hvBy3vhu6EufhaFvpvgNS5AzqAfbqVfr7kVWQVGx",
+        baseMint: "EcJU9vayKwYM61CuZqLSvTQN28qDe9nofNoSPa2jwQ1Y",
+        openOrders: "81ZY3F8dsr3iAuctozogAJTbUkuGGTpWmfmxfT5Uh7z3"
     },
     constants: {
         BooksideSpace: 90944 + 8,

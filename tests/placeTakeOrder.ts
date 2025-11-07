@@ -8,7 +8,10 @@ import {
     PlaceOrderArgs,
     SideUtils,
     PlaceOrderTypeUtils,
-    SelfTradeBehaviorUtils
+    SelfTradeBehaviorUtils,
+    uiBaseToLots,
+    uiPriceToLots,
+    uiQuoteToLots,
 } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "./utils/mint_utils";
 
@@ -43,12 +46,12 @@ async function placeOrder() {
     mintUtils.mintTo(market.baseMint, userBaseAcc.address);
 
     const args: PlaceOrderArgs = {
-        side: SideUtils.Bid,
-        priceLots: new anchor.BN(1000 + 1000),
-        maxBaseLots: new anchor.BN(1000),
-        maxQuoteLotsIncludingFees: new anchor.BN(100000000),
-        clientOrderId: new anchor.BN(105),
-        orderType: PlaceOrderTypeUtils.Market,
+        side: SideUtils.Bid,  // BUYING base token
+        priceLots: uiPriceToLots(market, 30),  // Willing to pay up to $30
+        maxBaseLots: uiBaseToLots(market, 10),  // Buying 10 base tokens
+        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 350),  // Max $350 spend
+        clientOrderId: new anchor.BN(Date.now()),
+        orderType: PlaceOrderTypeUtils.ImmediateOrCancel,  // Execute immediately
         expiryTimestamp: new anchor.BN(0),
         selfTradeBehavior: SelfTradeBehaviorUtils.DecrementTake,
         limit: 255

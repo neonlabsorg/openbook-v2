@@ -10,7 +10,8 @@ import {
     uiBaseToLots,
     uiPriceToLots,
     uiQuoteToLots,
-    PlaceOrderTypeUtils
+    PlaceOrderTypeUtils,
+    SelfTradeBehaviorUtils
 } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "./utils/mint_utils";
 
@@ -41,18 +42,18 @@ async function placeOrder() {
         walletKeypair,
         client.walletPk
     );
-    mintUtils.mintTo(market.quoteMint, userQuoteAcc.address);
-    mintUtils.mintTo(market.baseMint, userBaseAcc.address);
+    await mintUtils.mintTo(market.quoteMint, userQuoteAcc.address);
+    await mintUtils.mintTo(market.baseMint, userBaseAcc.address);
 
     const args: PlaceOrderArgs = {
-        side: SideUtils.Bid,
-        priceLots: uiPriceToLots(market, 20),
-        maxBaseLots: uiBaseToLots(market, 1000000),
-        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 100),
-        clientOrderId: new anchor.BN(123),
-        orderType: PlaceOrderTypeUtils.Limit,
+        side: SideUtils.Ask,  // SELLING base token
+        priceLots: uiPriceToLots(market, 25),  // Selling at $25
+        maxBaseLots: uiBaseToLots(market, 10),  // Selling 10 base tokens
+        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 300),  // Will receive ~$250
+        clientOrderId: new anchor.BN(Date.now()),
+        orderType: PlaceOrderTypeUtils.Limit,  // Limit order - will rest on book
         expiryTimestamp: new anchor.BN(0),
-        selfTradeBehavior: { decrementTake: {} },
+        selfTradeBehavior: SelfTradeBehaviorUtils.DecrementTake,
         limit: 255
     };
 
@@ -60,7 +61,7 @@ async function placeOrder() {
         new PublicKey(config.accounts.openOrders),
         marketPublicKey,
         market,
-        userQuoteAcc.address,
+        userBaseAcc.address,
         args,
         []
     );
