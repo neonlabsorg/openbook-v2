@@ -4,6 +4,9 @@ skip-lint = false
 [programs.localnet]
 openbook_v2 = "opnbkNkqux64GppQhwbyEVc3axhssFhVYuwar8rDHCu"
 
+[programs.devnet]
+openbook_v2 = "4euFSfDacDh7XauCX1mQ6dxyS48WFoykMTLVsWfjSncz"
+
 [registry]
 url = "https://api.apr.dev"
 

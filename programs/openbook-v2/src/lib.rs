@@ -5,7 +5,7 @@ use anchor_lang::prelude::{
     *,
 };
 
-declare_id!("opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb");
+declare_id!("4euFSfDacDh7XauCX1mQ6dxyS48WFoykMTLVsWfjSncz");
 
 #[macro_use]
 pub mod util;
