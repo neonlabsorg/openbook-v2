@@ -2,14 +2,10 @@ import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import fs from 'fs';
 import config from './config';
-import {
-    OpenBookV2Client
-} from "@openbook-dex/openbook-v2";
+import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 
-// Setup connection
 const connection = new Connection(config.RPC, 'confirmed');
 
-// Load wallet
 const keypairFile = fs.readFileSync(
     `${process.env.HOME}/.config/solana/id.json`,
     'utf-8'

@@ -3,11 +3,11 @@ import { PublicKey } from '@solana/web3.js';
 const config = {
     RPC: "https://api.devnet.solana.com",
     accounts: {
-        programId: "AasRc9CPvisthu12jwhu3otuQvoRgy1TQdiY9HFKfW2K",
-        market: "HFzCfEYi4nBCHFvdRYFA97MvheTxZR6wDXmrwrMk1K9g",
-        baseMint: "6JnVBKDoipzEHxiGTMjHs8kkcGF5dznMwr9HJfBkPC24",
-        quoteMint: "3U9kQid4uK599LqYXS7ptjCYtAseEmuQFY227PXpkVRH",
-        openOrders: "GLHFQHQEVMFSipFnWLWBuCBiGDxA7ebPuARAcBZrjACp"
+        programId: "4euFSfDacDh7XauCX1mQ6dxyS48WFoykMTLVsWfjSncz",
+        market: "J4poCDHBeSuQVnApXYrGBsm9niJbCg8WCRNgvU3kdPZe",
+        quoteMint: "7KestsAnwRKCKDTBwEE5h1d4gC2vQZdHpf3S94FitNcX",
+        baseMint: "6X25RMXNM91TuTGLrij63ojbCBJ18ANnu43vHks1QL3Z",
+        openOrders: "5f9XZ2GvGrAWkjHwavBhacBR5eGmdS1unkabmivDJZE9"
     },
     constants: {
         BooksideSpace: 90944 + 8,
