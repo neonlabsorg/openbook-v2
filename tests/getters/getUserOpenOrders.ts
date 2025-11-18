@@ -1,6 +1,6 @@
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import config from './config';
+import config from '../config';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import bs58 from 'bs58';
 import "dotenv/config"
@@ -15,21 +15,15 @@ const makerWallet = new Wallet(makerKeypair);
 const provider = new AnchorProvider(connection, makerWallet, {commitment: "confirmed"});
 const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.programId));
   
-async function cancelOrderById() {
+async function init() {
     const marketPublicKey = new PublicKey(config.accounts.market);
-    const market = await client.program.account.market.fetch(marketPublicKey);
     const openOrdersAccount = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
 
-    console.log(openOrdersAccount.openOrders, 'Current open orders');
-    
-    const [ix, signers] = await client.cancelOrderByIdIx(
-        new PublicKey(config.accounts.openOrders),
-        openOrdersAccount,
-        market,
-        openOrdersAccount.openOrders[0].id /// ID of the order to cancel, in this case it will always cancel the first order in the list
-    );
-    
-    const cancelTx = await client.sendAndConfirmTransaction([ix], signers);
-    console.log("Cancelled order ", cancelTx);
+    // Filter only open orders (isFree === 0)
+    const filteredOpenOrders = openOrdersAccount.openOrders.filter(function (el) {
+        return el.isFree === 0;
+    });
+
+    console.log(filteredOpenOrders, 'filteredOpenOrders');
 }
-cancelOrderById();
+init();

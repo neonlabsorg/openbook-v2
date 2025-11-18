@@ -35,7 +35,9 @@
     "@openbook-dex/openbook-v2": "^0.2.10",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.77.3",
-    "big.js": "^6.2.1"
+    "big.js": "^6.2.1",
+    "bs58": "^6.0.0",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

@@ -1,16 +1,7 @@
 import { AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import config from './config';
-import {
-    OpenBookV2Client,
-    PlaceOrderArgs,
-    SideUtils,
-    uiBaseToLots,
-    uiPriceToLots,
-    uiQuoteToLots,
-    PlaceOrderTypeUtils,
-    SelfTradeBehaviorUtils
-} from "@openbook-dex/openbook-v2";
+import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "./utils/mint_utils";
 import bs58 from 'bs58';
 import "dotenv/config"
@@ -25,9 +16,29 @@ const makerWallet = new Wallet(makerKeypair);
 const provider = new AnchorProvider(connection, makerWallet, {commitment: "confirmed"});
 const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.programId));
   
-async function placeOrder() {
+async function init() {
     const marketPublicKey = new PublicKey(config.accounts.market);
     const market = await client.program.account.market.fetch(marketPublicKey);
+
+    let openOrdersData = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
+    console.log('\nMaker\'s OpenOrders balances before consumeEventsIx:');
+    console.log('- Quote free:', openOrdersData.position.quoteFreeNative.toString());
+    console.log('- Base free:', openOrdersData.position.baseFreeNative.toString());
+
+    const consumeEventsIx = await client.consumeEventsIx(
+        marketPublicKey,
+        market,
+        new BN(10), // Limit - process up to 10 events
+        [new PublicKey(config.accounts.openOrders)]
+    );
+
+    const consumeTx = await client.sendAndConfirmTransaction([consumeEventsIx], {});
+    console.log("\nconsumeEventsIx ", consumeTx, "\n");
+   
+    openOrdersData = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
+    console.log('Maker\'s OpenOrders balances after consumeEventsIx:');
+    console.log('- Quote free:', openOrdersData.position.quoteFreeNative.toString());
+    console.log('- Base free:', openOrdersData.position.baseFreeNative.toString(), '\n');
 
     const mintUtils = new MintUtils(provider.connection, makerKeypair);
     const userQuoteAcc = await mintUtils.getOrCreateTokenAccount(
@@ -43,31 +54,21 @@ async function placeOrder() {
     );
 
     console.log(userQuoteAcc.amount.toString(), 'MAKER quote balance before');
-    console.log(userBaseAcc.amount.toString(), 'MAKER base balance before\n');
+    console.log(userBaseAcc.amount.toString(), 'MAKER base balance before');
 
-    const args: PlaceOrderArgs = {
-        side: SideUtils.Ask,  // SELLING base token
-        priceLots: uiPriceToLots(market, 25),  // Selling at $25
-        maxBaseLots: uiBaseToLots(market, 10),  // Selling 10 base tokens
-        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 300),  // Will receive ~$250
-        clientOrderId: new BN(Date.now()),
-        orderType: PlaceOrderTypeUtils.Limit,  // Limit order - will rest on book
-        expiryTimestamp: new BN(0),
-        selfTradeBehavior: SelfTradeBehaviorUtils.DecrementTake,
-        limit: 255  // How many matching orders from the opposite side to walk through
-    };
-
-    const [ix, signers] = await client.placeOrderIx(
+    const [ix, signers] = await client.settleFundsIx(
         new PublicKey(config.accounts.openOrders),
+        openOrdersData,
         marketPublicKey,
         market,
         userBaseAcc.address,
-        args,
-        []
+        userQuoteAcc.address,
+        null,
+        makerWallet.publicKey
     );
     
-    const tx = await client.sendAndConfirmTransaction([ix], { additionalSigners: signers });
-    console.log("Placed order ", tx, '\n');
+    const tx = await client.sendAndConfirmTransaction([ix],{ additionalSigners: signers });
+    console.log("\nsettleFunds ", tx, "\n");
 
     console.log((await mintUtils.getOrCreateTokenAccount(
         market.quoteMint,
@@ -81,4 +82,4 @@ async function placeOrder() {
         makerKeypair.publicKey
     )).amount.toString(), 'MAKER base balance after');
 }
-placeOrder();
+init();
