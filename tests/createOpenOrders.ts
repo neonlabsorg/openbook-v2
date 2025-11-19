@@ -19,7 +19,7 @@ const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.prog
   
 async function createOpenOrders() {
     const market = new PublicKey(config.accounts.market);
-    const tx = await client.createOpenOrders(makerWallet.payer, market, "name");
-    console.log("Created open orders acc", tx);
+    const openOrdersAccount = await client.createOpenOrders(makerWallet.payer, market, "name");
+    console.log("Created open orders account", openOrdersAccount);
 }
 createOpenOrders();

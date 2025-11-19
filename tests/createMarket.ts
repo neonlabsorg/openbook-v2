@@ -22,7 +22,7 @@ const client = new OpenBookV2Client(new AnchorProvider(connection, makerWallet, 
 
 async function createMarket() {
     /// Deploying base and quote SPL tokens for the market
-    const quoteMint = await deploySPLToken([makerKeypair, takerKeypair], 6);
+    const quoteMint = await deploySPLToken([makerKeypair, takerKeypair], 9);
     const baseMint = await deploySPLToken([makerKeypair, takerKeypair], 9);
 
     const name = "pSOL-TEST";
@@ -31,7 +31,7 @@ async function createMarket() {
         name,
         quoteMint,
         baseMint,
-        new BN(10000),   /// Minimum price increment: 0.01 USDC per lot
+        new BN(1000000),   /// Minimum price increment: 0.01 TEST per lot
         new BN(1000000), /// Minimum order size: 0.001 pSOL
         new BN(1000),
         new BN(1000),
@@ -48,7 +48,9 @@ async function createMarket() {
     });
 
     console.log("\nSIGNATURE market creation:", tx);
-    console.log("Deployed market", name, "at:", ixs[ixs.length - 1].keys[0].pubkey.toBase58());
+    console.log("\nDeployed market", name, "at:", ixs[ixs.length - 1].keys[0].pubkey.toBase58());
+    console.log("Quote mint:", quoteMint.toBase58());
+    console.log("Base mint:", baseMint.toBase58());
 }
 createMarket();
 
@@ -94,7 +96,6 @@ async function deploySPLToken(payers: Keypair[], decimals: number) : Promise<Pub
         [payers[0]]
     );
     console.log('\nSIGNATURE token deploying:', signature);
-    console.log("Deployed SPL Token:", mint);
 
     return mint;
 }

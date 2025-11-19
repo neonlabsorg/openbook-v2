@@ -20,8 +20,6 @@ async function cancelOrderById() {
     const market = await client.program.account.market.fetch(marketPublicKey);
     const openOrdersAccount = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
 
-    console.log(openOrdersAccount.openOrders, 'Current open orders');
-    
     const [ix, signers] = await client.cancelOrderByIdIx(
         new PublicKey(config.accounts.openOrders),
         openOrdersAccount,

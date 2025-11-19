@@ -4,10 +4,10 @@ const config = {
     RPC: "https://api.devnet.solana.com",
     accounts: {
         programId: "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
-        market: "Bozkex8fMN8K4AK3T1JWbv2jnm7dKj6N6bDhCapckYCK",
-        quoteMint: "CfZS8DA2tyVQPk9aRErZCD88CdXAhgaXob1VJQUavSj9",
-        baseMint: "7GkZbwCs2rquF54smcjDaLRNKSwj5qxLKAMHxMBhP8fW",
-        openOrders: "8ZvYbbn7XKo6LDtTSEj2qB6DabnoqPejwpTe1gVmT4Ex"
+        market: "9ZAste493xzkUw5WWnWHLnCczPCLBpL4sDEgrJZgtUcr",
+        quoteMint: "E9tm4XvYu6J2G8CtJecagpMwG5oQkfLnTKvqWSEvjjnu",
+        baseMint: "AZ97Q9DgwbuWANo1rj4KAhNdftbSZ7n6bAsbJVXosN1a",
+        openOrders: "Hu96AJDpzxxks7KwsBzD7wEokyvM2diBr8YuQnDeo5s7" /// This is the position account of the maker in order to be able to register Limit orders in the orderbook
     },
     constants: {
         BooksideSpace: 90944 + 8,
