@@ -3,7 +3,7 @@ import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import config from '../config';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import bs58 from 'bs58';
-import "dotenv/config"
+import "dotenv/config";
 
 const connection = new Connection(config.RPC, 'confirmed');
 
@@ -16,7 +16,6 @@ const provider = new AnchorProvider(connection, makerWallet, {commitment: "confi
 const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.programId));
   
 async function init() {
-    const marketPublicKey = new PublicKey(config.accounts.market);
     const openOrdersAccount = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
 
     // Filter only open orders (isFree === 0)

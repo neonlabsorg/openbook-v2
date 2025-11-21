@@ -13,7 +13,7 @@ import {
 } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "./utils/mint_utils";
 import bs58 from 'bs58';
-import "dotenv/config"
+import "dotenv/config";
 
 const connection = new Connection(config.RPC, 'confirmed');
 
@@ -26,6 +26,7 @@ const takerKeypair = Keypair.fromSecretKey(
 );
 
 const takerWallet = new Wallet(takerKeypair);
+
 
 const provider = new AnchorProvider(connection, takerWallet, {commitment: "confirmed"});
 const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.programId));

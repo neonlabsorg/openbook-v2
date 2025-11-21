@@ -1,13 +1,13 @@
 import { PublicKey } from '@solana/web3.js';
 
 const config = {
-    RPC: "https://api.devnet.solana.com",
+    RPC: "http://103.50.32.150:8899",
     accounts: {
-        programId: "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
-        market: "9ZAste493xzkUw5WWnWHLnCczPCLBpL4sDEgrJZgtUcr",
-        quoteMint: "E9tm4XvYu6J2G8CtJecagpMwG5oQkfLnTKvqWSEvjjnu",
-        baseMint: "AZ97Q9DgwbuWANo1rj4KAhNdftbSZ7n6bAsbJVXosN1a",
-        openOrders: "Hu96AJDpzxxks7KwsBzD7wEokyvM2diBr8YuQnDeo5s7" /// This is the position account of the maker in order to be able to register Limit orders in the orderbook
+        programId: "4euFSfDacDh7XauCX1mQ6dxyS48WFoykMTLVsWfjSncz",
+        market: "9z4Pvg61EQVhN38xxxfNsfC9UcuwpJ4FGYoEpDoEXv7R",
+        quoteMint: "2oFUfmGG4dYhdnSayYYV2HuHDcCyua4fMMuFj3A24PgH",
+        baseMint: "HCCF5Swui7Qu9FvZR9L2sXGyLMmfX144C7SQSuQvevUt",
+        openOrders: "Bi5PDbxCWUgdt41GYFemGyDJrQLMv531ejtVjSm7nwFv" /// This is the position account of the maker in order to be able to register Limit orders in the orderbook
     },
     constants: {
         BooksideSpace: 90944 + 8,

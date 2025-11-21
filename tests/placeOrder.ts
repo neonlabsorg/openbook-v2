@@ -13,7 +13,7 @@ import {
 } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "./utils/mint_utils";
 import bs58 from 'bs58';
-import "dotenv/config"
+import "dotenv/config";
 
 const connection = new Connection(config.RPC, 'confirmed');
 
@@ -44,8 +44,6 @@ async function placeOrder() {
 
     console.log(userQuoteAcc.amount.toString(), 'MAKER quote balance before');
     console.log(userBaseAcc.amount.toString(), 'MAKER base balance before\n');
-
-    console.log(new BN(Date.now()), 'new BN(Date.now())');
 
     const args: PlaceOrderArgs = {
         side: SideUtils.Ask,  // SELLING base token

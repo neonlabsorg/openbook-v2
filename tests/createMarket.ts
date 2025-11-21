@@ -4,7 +4,7 @@ import config from './config';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
 import bs58 from 'bs58';
-import "dotenv/config"
+import "dotenv/config";
 
 const connection = new Connection(config.RPC, 'confirmed');
 

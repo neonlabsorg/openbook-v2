@@ -3,7 +3,7 @@ import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import config from '../config';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import bs58 from 'bs58';
-import "dotenv/config"
+import "dotenv/config";
 
 const connection = new Connection(config.RPC, 'confirmed');
 
@@ -22,7 +22,7 @@ async function init() {
     for (const openOrderPubkey of openorders) {
         const openOrder = await client.deserializeOpenOrderAccount(openOrderPubkey);
         if (openOrder) {
-            if (openOrder.version != 1){
+            if (openOrder.version != 1) {
                 throw "using an old open orders account, please close it"
             }
             
