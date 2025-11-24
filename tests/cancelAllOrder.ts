@@ -15,19 +15,20 @@ const makerWallet = new Wallet(makerKeypair);
 const provider = new AnchorProvider(connection, makerWallet, {commitment: "confirmed"});
 const client = new OpenBookV2Client(provider, new PublicKey(config.accounts.programId));
   
-async function cancelOrderById() {
+async function init() {
     const marketPublicKey = new PublicKey(config.accounts.market);
     const market = await client.program.account.market.fetch(marketPublicKey);
     const openOrdersAccount = await client.program.account.openOrdersAccount.fetch(new PublicKey(config.accounts.openOrders));
 
-    const [ix, signers] = await client.cancelOrderByIdIx(
+    const [ix, signers] = await client.cancelAllOrdersIx(
         new PublicKey(config.accounts.openOrders),
         openOrdersAccount,
         market,
-        openOrdersAccount.openOrders[0].id /// ID of the order to cancel, in this case it will always cancel the first order in the list
-    );
+        255,
+        null
+    )
     
     const cancelTx = await client.sendAndConfirmTransaction([ix], signers);
-    console.log("Cancelled order signature", cancelTx);
+    console.log("Cancelled orders signature", cancelTx);
 }
-cancelOrderById();
+init();
