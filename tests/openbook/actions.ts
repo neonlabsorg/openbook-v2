@@ -1,6 +1,7 @@
 import { BN } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
-import { MintUtils } from "../utils/mint_utils";
+import { MintUtils } from "../utils/mintUtils";
+import { Market } from "../utils/interfaces";
 import {
     PlaceOrderArgs,
     SideUtils,
@@ -8,11 +9,13 @@ import {
     uiPriceToLots,
     uiQuoteToLots,
     PlaceOrderTypeUtils,
-    SelfTradeBehaviorUtils
+    SelfTradeBehaviorUtils,
+    findAllMarkets
 } from "@openbook-dex/openbook-v2";
 import "dotenv/config"
 
 export async function createMarket(wallet, marketName, quoteMint, baseMint, openbookClient): Promise<PublicKey> {
+    logMessage("Create Market");
     const [ixs, signers] = await openbookClient.createMarketIx(
         wallet.publicKey,
         marketName,
@@ -30,7 +33,6 @@ export async function createMarket(wallet, marketName, quoteMint, baseMint, open
         wallet.publicKey
     );
 
-    console.log("Create market ", marketName)
     let tx;
     try {
         tx = await openbookClient.sendAndConfirmTransaction(ixs, {
@@ -49,12 +51,14 @@ export async function createMarket(wallet, marketName, quoteMint, baseMint, open
 }
 
 export async function createOpenOrders(wallet, marketAddress, marketName, openbookClient): Promise<PublicKey> {
+    logMessage("Create Open Orders Account");
     const openOrdersAccount = await openbookClient.createOpenOrders(wallet.payer, marketAddress, marketName);
-    console.log("Create open orders account: ", openOrdersAccount);
+    console.log("Open Order Account Address: ", openOrdersAccount.toBase58());
     return openOrdersAccount;
 }
 
 export async function placeOrder(makerKeypair, marketAddress, openOrdersAccount, openbookClient, provider) {
+    logMessage("Place an order");
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const mintUtils = new MintUtils(provider.connection, makerKeypair);
@@ -72,7 +76,7 @@ export async function placeOrder(makerKeypair, marketAddress, openOrdersAccount,
 
     console.log(userQuoteAcc.amount.toString(), 'MAKER quote balance before');
     console.log(userBaseAcc.amount.toString(), 'MAKER base balance before\n');
-    console.log(new BN(Date.now()), 'new BN(Date.now())');
+    console.log("Timestamp: ", new BN(Date.now()).toString());
 
     const args: PlaceOrderArgs = {
         side: SideUtils.Ask,  // SELLING base token
@@ -112,6 +116,7 @@ export async function placeOrder(makerKeypair, marketAddress, openOrdersAccount,
 }
 
 export async function placeTakeOrder(makerKeypair, takerKeypair, marketAddress, openbookClient, provider) {
+    logMessage("Place Take Order");
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const mintUtils = new MintUtils(provider.connection, takerKeypair);
@@ -199,6 +204,7 @@ export async function placeTakeOrder(makerKeypair, takerKeypair, marketAddress, 
 }
 
 export async function settleFunds(makerKeypair, makerWallet, marketAddress, openOrdersAccount, openbookClient, provider) {
+    logMessage("Settle Funds");
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     let openOrdersData = await openbookClient.program.account.openOrdersAccount.fetch(openOrdersAccount);
@@ -264,10 +270,18 @@ export async function settleFunds(makerKeypair, makerWallet, marketAddress, open
     )).amount.toString(), 'MAKER base balance after');
 }
 
-export async function getMarketTotalAmount(makerWallet, marketAddress, openbookClient) {
-    const openorders = await openbookClient.findOpenOrdersForMarket(makerWallet.publicKey, marketAddress);
+export async function getMarkets(connection, programId, provider): Promise<Market[]> {
+    logMessage("Get Markets");
+    const markets = await findAllMarkets(connection, programId, provider);
+    console.log('Find All Markets Result: ', markets);
+    return markets;
+}
 
-    for (const openOrderPubkey of openorders) {
+export async function getMarketOpenOrders(makerWallet, marketAddress, openbookClient): Promise<PublicKey[]> {
+    logMessage("Get Market Open Orders");
+    const openOrders = await openbookClient.findOpenOrdersForMarket(makerWallet.publicKey, marketAddress);
+
+    for (const openOrderPubkey of openOrders) {
         const openOrder = await openbookClient.deserializeOpenOrderAccount(openOrderPubkey);
         if (openOrder) {
             if (openOrder.version != 1) {
@@ -278,9 +292,11 @@ export async function getMarketTotalAmount(makerWallet, marketAddress, openbookC
             console.log("asksBaseLots", openOrder.position.asksBaseLots.toNumber());
         }
     }
+    return openOrders;
 }
 
-export async function getUserOpenOrders(openOrdersAccount, openbookClient) {
+export async function getUserOpenOrders(openOrdersAccount, openbookClient): Promise<PublicKey[]> {
+    logMessage("Get User Open Orders");
     const openOrdersAccountInfo = await openbookClient.program.account.openOrdersAccount.fetch(openOrdersAccount);
 
     // Filter only open orders (isFree === 0)
@@ -288,5 +304,44 @@ export async function getUserOpenOrders(openOrdersAccount, openbookClient) {
         return el.isFree === 0;
     });
 
-    console.log(filteredOpenOrders, 'filteredOpenOrders');
+    console.log(openOrdersAccount + ' Open Orders: ', filteredOpenOrders);
+    return filteredOpenOrders;
+}
+
+export async function getOpenOrdersAccountFreeBalances(openOrdersAccount, openbookClient): Promise<Object> {
+    logMessage("Get Open Orders Account Free Balances");
+    const openOrdersAccountInfo = await openbookClient.program.account.openOrdersAccount.fetch(openOrdersAccount);
+
+    console.log('- Quote free:', openOrdersAccountInfo.position.quoteFreeNative.toString());
+    console.log('- Base free:', openOrdersAccountInfo.position.baseFreeNative.toString(), '\n');
+    return {
+        "quote_free_balance": openOrdersAccountInfo.position.quoteFreeNative.toString(),
+        "base_free_balance": openOrdersAccountInfo.position.baseFreeNative.toString()
+    }
+}
+
+export async function getTotalAmountsForOpenOrders(makerWallet, marketAddress, openbookClient): Promise<Object> {
+    logMessage("Get Total Amount For Open Orders");
+    const openOrders = await openbookClient.findOpenOrdersForMarket(makerWallet.publicKey, marketAddress);
+    let result = {};
+    for (const openOrderPubkey of openOrders) {
+        const openOrder = await openbookClient.deserializeOpenOrderAccount(openOrderPubkey);
+        if (openOrder) {
+            if (openOrder.version != 1) {
+                throw "using an old open orders account, please close it"
+            }
+
+            const bidsQuoteLots = openOrder.position.bidsQuoteLots.toNumber();
+            const asksBaseLots = openOrder.position.asksBaseLots.toNumber();
+            console.log("bidsQuoteLots: ", bidsQuoteLots);
+            console.log("asksBaseLots: ", asksBaseLots);
+            result[openOrderPubkey] = [bidsQuoteLots, asksBaseLots]
+        }
+    }
+    return result;
+
+}
+
+function logMessage(message) {
+    console.log("\n\x1b[32m%s\x1b[0m", message);
 }

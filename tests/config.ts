@@ -2,7 +2,6 @@ import { PublicKey } from '@solana/web3.js';
 
 const config = {
     RPC: "https://api.devnet.solana.com",
-    RPC: "http://5.75.145.216:8899",
     accounts: {
         programId: "FBz12zuKVbmMA1Nao422RocMjm2vPDVUaeKWAprH7Y1r",
     },
