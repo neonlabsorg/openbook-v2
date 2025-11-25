@@ -29,7 +29,8 @@ async function runTradingProcess() {
 
     const providerMaker = new AnchorProvider(connection, makerWallet, { commitment: 'confirmed' });
     const providerTaker = new AnchorProvider(connection, takerWallet, { commitment: "confirmed" });
-    const client = new OpenBookV2Client(providerMaker, programId);
+    const clientMaker = new OpenBookV2Client(providerMaker, programId);
+    const clientTaker = new OpenBookV2Client(providerTaker, programId);
 
     const quote = await solanaClient.createToken([makerKeypair, takerKeypair], 9);
     const base = await solanaClient.createToken([makerKeypair, takerKeypair], 9);
@@ -37,25 +38,25 @@ async function runTradingProcess() {
     console.log("Base token: " + base["name"] + " ", base["mint"].toBase58());
 
     const marketName = quote["name"] + "-" + base["name"];
-    const marketAddress = await createMarket(makerWallet, marketName, quote["mint"], base["mint"], client);
+    const marketAddress = await createMarket(makerWallet, marketName, quote["mint"], base["mint"], clientMaker);
 
     // create Open Orders Account (for Maker only)
-    const openOrdersAccount = await createOpenOrders(makerWallet, marketAddress, marketName, client);
+    const openOrdersAccount = await createOpenOrders(makerWallet, marketAddress, marketName, clientMaker);
 
     // place order to sell 10 base tokens
-    await placeOrder(makerKeypair, marketAddress, openOrdersAccount, client, providerMaker);
+    await placeOrder(makerKeypair, marketAddress, openOrdersAccount, clientMaker, providerMaker);
 
     // get market total amount info
-    await getMarketOpenOrders(makerWallet, marketAddress, client);
+    await getMarketOpenOrders(makerWallet, marketAddress, clientMaker);
 
     // get users's Open Orders
-    await getUserOpenOrders(openOrdersAccount, client);
+    await getUserOpenOrders(openOrdersAccount, clientMaker);
 
     // taker places its own order to buy 10 base tokens
-    await placeTakeOrder(makerKeypair, takerKeypair, marketAddress, client, providerTaker);
+    await placeTakeOrder(makerKeypair, takerKeypair, marketAddress, clientTaker, providerTaker);
 
     // execute the deal
-    await settleFunds(makerKeypair, makerWallet, marketAddress, openOrdersAccount, client, providerMaker);
+    await settleFunds(makerKeypair, makerWallet, marketAddress, openOrdersAccount, clientMaker, providerMaker);
 
     // check balances
 }

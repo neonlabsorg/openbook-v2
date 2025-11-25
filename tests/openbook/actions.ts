@@ -216,7 +216,7 @@ export async function settleFunds(makerKeypair, makerWallet, marketAddress, open
         marketAddress,
         market,
         new BN(10), // Limit - process up to 10 events
-        [new PublicKey(openbookClient.accounts.openOrders)]
+        [openOrdersAccount]
     );
 
     const consumeTx = await openbookClient.sendAndConfirmTransaction([consumeEventsIx], {});
