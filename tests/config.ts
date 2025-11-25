@@ -2,12 +2,9 @@ import { PublicKey } from '@solana/web3.js';
 
 const config = {
     RPC: "https://api.devnet.solana.com",
+    RPC: "http://5.75.145.216:8899",
     accounts: {
-        programId: "opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb",
-        market: "9ZAste493xzkUw5WWnWHLnCczPCLBpL4sDEgrJZgtUcr",
-        quoteMint: "E9tm4XvYu6J2G8CtJecagpMwG5oQkfLnTKvqWSEvjjnu",
-        baseMint: "AZ97Q9DgwbuWANo1rj4KAhNdftbSZ7n6bAsbJVXosN1a",
-        openOrders: "Hu96AJDpzxxks7KwsBzD7wEokyvM2diBr8YuQnDeo5s7" /// This is the position account of the maker in order to be able to register Limit orders in the orderbook
+        programId: "FBz12zuKVbmMA1Nao422RocMjm2vPDVUaeKWAprH7Y1r",
     },
     constants: {
         BooksideSpace: 90944 + 8,
@@ -15,13 +12,13 @@ const config = {
     },
     utils: {
         pdas: {
-            market: function(marketKp: PublicKey, programId: PublicKey) {
+            market: function (marketKp: PublicKey, programId: PublicKey) {
                 return PublicKey.findProgramAddressSync(
                     [Buffer.from('Market'), marketKp.toBuffer()],
                     programId
                 )
             },
-            eventAuthority: function(programId: PublicKey) {
+            eventAuthority: function (programId: PublicKey) {
                 return PublicKey.findProgramAddressSync(
                     [Buffer.from('__event_authority')],
                     programId
