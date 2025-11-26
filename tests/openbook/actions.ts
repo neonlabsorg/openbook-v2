@@ -21,8 +21,8 @@ export async function createMarket(wallet, marketName, quoteMint, baseMint, open
         marketName,
         quoteMint,
         baseMint,
-        new BN(1000000),   /// Minimum price increment: 0.01 TEST per lot
-        new BN(1000000), /// Minimum order size: 0.001 pSOL
+        new BN(1000000), /// Minimum price increment: 0.01 quote token per lot
+        new BN(1000000), /// Minimum order size: 0.001 base token
         new BN(1000),
         new BN(1000),
         new BN(0),
@@ -62,6 +62,7 @@ export async function placeOrder(makerKeypair, marketAddress, openOrdersAccount,
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const mintUtils = new MintUtils(provider.connection, makerKeypair);
+
     const userQuoteAcc = await mintUtils.getOrCreateTokenAccount(
         market.quoteMint,
         makerKeypair,

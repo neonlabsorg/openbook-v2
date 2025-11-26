@@ -1,3 +1,4 @@
+import { command, number, option, run } from "cmd-ts";
 import { SolanaClient, connection } from "./utils/solanaClient"
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { PublicKey } from '@solana/web3.js';
@@ -14,11 +15,31 @@ import {
     getUserOpenOrders
 } from "./openbook/actions"
 
+const ordersNumber = option({
+    type: number,
+    defaultValue: () => 2,
+    long: "number-of-orders",
+    short: "n",
+    description: "Number of orders for Maker to place",
+});
 
-const solanaClient = new SolanaClient();
-const programId = new PublicKey(config.accounts.programId);
+const app = command({
+    name: "runTradingProcess",
+    args: {
+        ordersNumber,
+    },
+    handler: ({
+        ordersNumber,
+    }) => {
+        runTradingProcess(ordersNumber);
+    },
+});
 
-async function runTradingProcess() {
+run(app, process.argv.slice(2));
+
+async function runTradingProcess(ordersNumber: number) {
+    const solanaClient = new SolanaClient();
+    const programId = new PublicKey(config.accounts.programId);
     const makerKeypair = await solanaClient.createAccountWithBalance();
     console.log("Maker: ", makerKeypair.publicKey.toBase58());
     const makerWallet = new Wallet(makerKeypair);
@@ -44,7 +65,10 @@ async function runTradingProcess() {
     const openOrdersAccount = await createOpenOrders(makerWallet, marketAddress, marketName, clientMaker);
 
     // place order to sell 10 base tokens
-    await placeOrder(makerKeypair, marketAddress, openOrdersAccount, clientMaker, providerMaker);
+    for (let i = 0; i < ordersNumber; i++) {
+        console.log(i)
+        await placeOrder(makerKeypair, marketAddress, openOrdersAccount, clientMaker, providerMaker);
+    }
 
     // get market total amount info
     await getMarketOpenOrders(makerWallet, marketAddress, clientMaker);
@@ -53,12 +77,13 @@ async function runTradingProcess() {
     await getUserOpenOrders(openOrdersAccount, clientMaker);
 
     // taker places its own order to buy 10 base tokens
-    await placeTakeOrder(makerKeypair, takerKeypair, marketAddress, clientTaker, providerTaker);
-
+    for (let i = 0; i < ordersNumber; i++) {
+        console.log(i)
+        await placeTakeOrder(makerKeypair, takerKeypair, marketAddress, clientTaker, providerTaker);
+    }
     // execute the deal
-    await settleFunds(makerKeypair, makerWallet, marketAddress, openOrdersAccount, clientMaker, providerMaker);
-
-    // check balances
+    for (let i = 0; i < ordersNumber; i++) {
+        console.log(i)
+        await settleFunds(makerKeypair, makerWallet, marketAddress, openOrdersAccount, clientMaker, providerMaker);
+    }
 }
-
-runTradingProcess()

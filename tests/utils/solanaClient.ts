@@ -1,5 +1,6 @@
 import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
+import { getRandomName } from "./helpers";
 import config from '../config';
 import "dotenv/config"
 
@@ -48,7 +49,7 @@ export class SolanaClient {
                     mint,
                     keypairAta,
                     payers[0].publicKey,
-                    1000 * 10 ** decimals
+                    10000 * 10 ** decimals
                 )
             );
         }
@@ -64,8 +65,6 @@ export class SolanaClient {
     };
 
     async createToken(payers: Keypair[], decimals: number): Promise<Object> {
-        const mint = await this.deploySPLToken(payers, decimals);
-        const name = Math.random().toString(36).toUpperCase().replace(/[0-9O]/g, '').substring(1, 5);
-        return { "name": name, "mint": mint }
+        return { "name": getRandomName(), "mint": await this.deploySPLToken(payers, decimals) }
     }
 }
