@@ -4,7 +4,6 @@ import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { log } from "./utils/helpers";
-import "dotenv/config";
 import config from './config';
 import {
     createMarket,

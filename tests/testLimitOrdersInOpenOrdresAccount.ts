@@ -3,7 +3,6 @@ import { SolanaClient, connection } from "./utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import "dotenv/config";
 import { log } from "./utils/helpers";
 import config from './config';
 import {

@@ -2,6 +2,7 @@ import { BN } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { MintUtils } from "../utils/mintUtils";
 import { Market } from "../utils/interfaces";
+import { log } from "../utils/helpers";
 import {
     PlaceOrderArgs,
     SideUtils,
@@ -12,12 +13,7 @@ import {
     SelfTradeBehaviorUtils,
     findAllMarkets
 } from "@openbook-dex/openbook-v2";
-import "dotenv/config";
 
-var log = require('tracer').colorConsole({
-    format: '{{timestamp}} [{{title}}]:: {{message}}',
-    dateformat: 'HH:MM:ss.L'
-});
 
 export async function createMarket(wallet, marketName, quoteMint, baseMint, openbookClient): Promise<PublicKey> {
     const [ixs, signers] = await openbookClient.createMarketIx(

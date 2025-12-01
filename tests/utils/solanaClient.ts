@@ -2,7 +2,6 @@ import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction,
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
 import { getRandomName } from "./helpers";
 import config from '../config';
-import "dotenv/config";
 import { log } from "./helpers";
 
 export const connection = new Connection(config.RPC, 'confirmed');
