@@ -2,7 +2,8 @@ import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction,
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
 import { getRandomName } from "./helpers";
 import config from '../config';
-import "dotenv/config"
+import "dotenv/config";
+import { log } from "./helpers";
 
 export const connection = new Connection(config.RPC, 'confirmed');
 
@@ -52,6 +53,16 @@ export class SolanaClient {
                     10000 * 10 ** decimals
                 )
             );
+
+            if ((i + 1) % 10 == 0) {
+                const signature = await sendAndConfirmTransaction(
+                    connection,
+                    transaction,
+                    [payers[0]]
+                );
+                log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
+                transaction = new Transaction();
+            }
         }
 
         const signature = await sendAndConfirmTransaction(
@@ -59,12 +70,15 @@ export class SolanaClient {
             transaction,
             [payers[0]]
         );
-        console.log('\nSIGNATURE token deploying:', signature);
+        log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
 
         return mint;
     };
 
     async createToken(payers: Keypair[], decimals: number): Promise<Object> {
-        return { "name": getRandomName(), "mint": await this.deploySPLToken(payers, decimals) }
+        const name = getRandomName();
+        const mint = await this.deploySPLToken(payers, decimals);
+        log.info("Quote token %s with mint %s created", name, mint.toBase58());
+        return { "name": name, "mint": mint };
     }
 }
