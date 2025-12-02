@@ -1,10 +1,10 @@
 import { command, number, option, run } from "cmd-ts";
-import { SolanaClient, connection } from "./utils/solanaClient";
+import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { log } from "./utils/helpers";
-import config from './config';
+import { log } from "../utils/helpers";
+import config from '../config';
 import {
     createMarket,
     createOpenOrders,
@@ -13,7 +13,7 @@ import {
     settleFunds,
     getMarketOpenOrders,
     getUserOpenOrders
-} from "./openbook/actions";
+} from "../openbook/actions";
 
 const ordersNumber = option({
     type: number,
@@ -53,8 +53,8 @@ async function runTradingProcess(ordersNumber: number) {
     const clientMaker = new OpenBookV2Client(providerMaker, programId);
     const clientTaker = new OpenBookV2Client(providerTaker, programId);
 
-    const quote = await solanaClient.createToken([makerKeypair, takerKeypair], 9);
-    const base = await solanaClient.createToken([makerKeypair, takerKeypair], 9);
+    const quote = await solanaClient.createToken("Quote", [makerKeypair, takerKeypair], 9);
+    const base = await solanaClient.createToken("Base", [makerKeypair, takerKeypair], 9);
 
     const marketName = quote["name"] + "-" + base["name"];
     const marketAddress = await createMarket(makerWallet, marketName, quote["mint"], base["mint"], clientMaker);

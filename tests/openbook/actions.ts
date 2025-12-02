@@ -1,7 +1,7 @@
 import { BN } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import { MintUtils } from "../utils/mintUtils";
-import { Market } from "../utils/interfaces";
+import { IMarket } from "../utils/interfaces";
 import { log } from "../utils/helpers";
 import {
     PlaceOrderArgs,
@@ -54,7 +54,7 @@ export async function createOpenOrders(id, wallet, marketAddress, marketName, op
     return openOrdersAccount;
 }
 
-export async function placeOrder(id, makerKeypair, marketAddress, openOrdersAccount, openbookClient, provider) {
+export async function placeOrder(id, makerKeypair, marketAddress, openOrdersAccount, openbookClient, provider): Promise<Object> {
     const market = await openbookClient.program.account.market.fetch(marketAddress);
     const mintUtils = new MintUtils(provider.connection, makerKeypair);
 
@@ -89,6 +89,7 @@ export async function placeOrder(id, makerKeypair, marketAddress, openOrdersAcco
 
     const tx = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
     log.info("[id_%s] Order placed. Timestamp: %s, signature: %s", id, timestamp, tx);
+    return { "timestamp": timestamp, "orderPlacedTxSig": tx };
 }
 
 export async function placeTakeOrder(id, takerKeypair, marketAddress, openbookClient, provider) {
@@ -182,15 +183,27 @@ export async function settleFunds(id, makerKeypair, makerWallet, marketAddress, 
     log.info("[id_%s] SettleFunds tx sig: %s", id, tx);
 }
 
-export async function getMarkets(connection, programId, provider): Promise<Market[]> {
+export async function getMarkets(connection, programId, provider): Promise<IMarket[]> {
+    let result: IMarket[] = [];
+
     const markets = await findAllMarkets(connection, programId, provider);
     log.info("Find All Markets Result: %s", markets);
-    return markets;
+    for (const mk of markets) {
+        let newMarket: IMarket = {
+            address: new PublicKey(mk.market),
+            baseMint: new PublicKey(mk.baseMint),
+            quoteMint: new PublicKey(mk.quoteMint),
+            name: mk.name,
+            openOrderAccounts: []
+        }
+        result.push(newMarket)
+    }
+    return result;
 }
 
 export async function getMarketOpenOrders(makerWallet, marketAddress, openbookClient): Promise<PublicKey[]> {
     const openOrders = await openbookClient.findOpenOrdersForMarket(makerWallet.publicKey, marketAddress);
-
+    let orders: string[] = [];
     for (const openOrderPubkey of openOrders) {
         const openOrder = await openbookClient.deserializeOpenOrderAccount(openOrderPubkey);
         if (openOrder) {
@@ -198,8 +211,9 @@ export async function getMarketOpenOrders(makerWallet, marketAddress, openbookCl
                 throw "using an old open orders account, please close it"
             }
         }
+        orders.push(openOrderPubkey);
     }
-    log.info("Open Orders: %s", openOrders);
+    log.info("Open Orders: %s", orders.toString());
     return openOrders;
 }
 
