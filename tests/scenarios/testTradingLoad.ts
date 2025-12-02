@@ -4,14 +4,11 @@ import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { log } from "../utils/helpers";
-import { Maker, Taker, Market, OpenOrderAccount } from "../utils/interfaces";
+import { Maker, Taker, Market } from "../openbook/core";
 import config from '../config';
 import {
     createMarket,
-    createOpenOrders,
-    placeOrder,
     placeTakeOrder,
-    settleFunds
 } from "../openbook/actions";
 import tradingConfig from "../tradingConfig";
 
@@ -27,10 +24,10 @@ run(app, process.argv.slice(2));
 
 async function runTradingProcess() {
     const ordersNumberPerOpenOrderAccount = tradingConfig.common.oredrsPerTradingAccount;
-    const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMaker;
+    const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
     // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker, one Taker can place orders in range [0, 40))
-    const takersNumber = tradingConfig.common.makers * tradingConfig.common.tradingAccountsPerMaker;
+    const takersNumber = tradingConfig.common.makers * tradingConfig.common.tradingAccountsPerMakersMarket;
     const marketsNumber = tradingConfig.common.markets;
 
     const solanaClient = new SolanaClient();
@@ -85,6 +82,7 @@ async function runTradingProcess() {
             mk.setBaseMint(base["mint"]);
             mk.setQuoteMint(quote["mint"]);
             mk.setName(quote["name"] + "-" + base["name"]);
+            mk.setMaker(makers[i]);
             mk.setMarket(await createMarket(
                 makers[i].user.wallet,
                 mk.market.name,
@@ -97,50 +95,14 @@ async function runTradingProcess() {
         log.info("Maker's %s markets: ", makers[i].user.account.publicKey, makers[i].user.markets);
     }
 
-
     // create Open Orders Accounts (for Makers only)
-    for (let i = 0; i < makersNumber; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            for (let k = 0; k < openOrderAccountsNumber; k++) {
-                let openOrderAccount = new OpenOrderAccount();
-                const id = i + "_" + j + "_" + k;
-                openOrderAccount.setAddress(await createOpenOrders(
-                    id,
-                    makers[i].user.wallet,
-                    makers[i].user.markets[j].market.address,
-                    makers[i].user.markets[j].market.name,
-                    makers[i].user.client
-                ))
-                makers[i].user.markets[j].market.openOrderAccounts.push(openOrderAccount);
-            }
-        }
+    for (let j = 0; j < makers.length; j++) {
+        await makers[j].createOpenOrderAccounts(openOrderAccountsNumber);
     }
 
     // place orders to sell 10 base tokens per one order
-    let step = 0;
-    for (let i = 0; i < makersNumber; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            for (let k = 0; k < openOrderAccountsNumber; k++) {
-                for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
-                    const id = i + "_" + j + "_" + k + "_" + m;
-                    let order: Object = await placeOrder(
-                        id,
-                        makers[i].user.account,
-                        makers[i].user.markets[j].market.address,
-                        makers[i].user.markets[j].market.openOrderAccounts[k].openOrderAccount.address,
-                        makers[i].user.client,
-                        makers[i].user.provider
-                    );
-                    makers[i].user.markets[j].market.openOrderAccounts[k].openOrderAccount.openOrders.push(order);
-                }
-                log.info(
-                    "Maker %s: market's %s OpenOrderAccounts: ",
-                    makers[i].user.account.publicKey,
-                    makers[i].user.markets[j].market.address,
-                    makers[i].user.markets[j].market.openOrderAccounts[k].openOrderAccount
-                );
-            }
-        }
+    for (let j = 0; j < makers.length; j++) {
+        await makers[j].placeAskOrders(ordersNumberPerOpenOrderAccount);
     }
 
     // takers place their own orders to buy 10 base tokens
@@ -162,22 +124,7 @@ async function runTradingProcess() {
     }
 
     // execute the deals
-    for (let i = 0; i < makersNumber; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            for (let k = 0; k < openOrderAccountsNumber; k++) {
-                for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
-                    const id = i + "_" + j + "_" + k + "_" + m;
-                    await settleFunds(
-                        id,
-                        makers[i].user.account,
-                        makers[i].user.wallet,
-                        makers[i].user.markets[j].market.address,
-                        makers[i].user.markets[j].market.openOrderAccounts[k].openOrderAccount.address,
-                        makers[i].user.client,
-                        makers[i].user.provider
-                    );
-                }
-            }
-        }
+    for (let j = 0; j < makers.length; j++) {
+        await makers[j].settleFunds();
     }
 }

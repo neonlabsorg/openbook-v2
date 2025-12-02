@@ -2,7 +2,7 @@ const tradingConfig = {
     common: {
         makers: 2, // number of Makers
         markets: 1, //number of trading pairs per Maker
-        tradingAccountsPerMaker: 2, // number of OpenOrdersAccount per each Maker
+        tradingAccountsPerMakersMarket: 2, // number of OpenOrdersAccount per each Maker
         oredrsPerTradingAccount: 2, // number of orders per each Trading account, range [0, 24)
         ordersDistributionStrategy: "HalfSellHalfBuy", // number of orders with side ask = all order's number / 2, number of orders with side bid = all order's number / 2
     },
