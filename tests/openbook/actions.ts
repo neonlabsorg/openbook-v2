@@ -17,6 +17,7 @@ import {
     SelfTradeBehaviorUtils,
     findAllMarkets
 } from "@openbook-dex/openbook-v2";
+import Prometheus from "prom-client";
 
 
 export async function createMarket(
@@ -172,6 +173,7 @@ export async function placeTakeOrder(
 
 export async function settleFunds(
     id: string | number,
+    metric: Prometheus.Histogram,
     makerKeypair: Keypair,
     makerWallet: Wallet,
     marketAddress: PublicKey,
@@ -217,7 +219,9 @@ export async function settleFunds(
         makerWallet.publicKey
     );
 
+    const end = metric.startTimer();
     const tx = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
+    end({owner: makerWallet.publicKey.toBase58()});
     log.info("[id_%s] SettleFunds tx sig: %s", id, tx);
 }
 

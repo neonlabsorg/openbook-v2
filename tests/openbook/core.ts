@@ -9,6 +9,7 @@ import {
     settleFunds
 } from "../openbook/actions";
 import { log } from "../utils/helpers";
+import Prometheus from "prom-client";
 
 export class Maker {
     public user: IMaker = {
@@ -39,21 +40,22 @@ export class Maker {
         this.user.markets = markets;
     }
 
-    public async createOpenOrderAccounts(n: number) {
+    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter) {
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].createOpenOrderAccounts(n);
+            await this.user.markets[j].createOpenOrderAccounts(n, accountCounter);
+
         };
     }
 
-    public async placeAskOrders(n: number) {
+    public async placeAskOrders(n: number, orderCounter: Prometheus.Counter) {
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].placeOrders(n);
+            await this.user.markets[j].placeOrders(n, orderCounter);
         };
     }
 
-    public async settleFunds() {
+    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram) {
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].settleFunds();
+            await this.user.markets[j].settleFunds(settleFundsCounter, settleFundsHistogram);
         };
     }
 }
@@ -117,7 +119,7 @@ export class Market {
         this.market.openOrderAccounts = openOrderAccounts;
     }
 
-    public async createOpenOrderAccounts(n: number) {
+    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter) {
         for (let k = 0; k < n; k++) {
             let openOrderAccount = new OpenOrderAccount();
             const id = k.toString() + "_" + this.market.maker.user.account.publicKey.toBase58().slice(0, 5);
@@ -132,6 +134,12 @@ export class Market {
             openOrderAccount.setAddress(account);
 
             this.market.openOrderAccounts.push(openOrderAccount);
+            accountCounter.inc(
+                {
+                    owner: this.market.maker.user.account.publicKey.toBase58(),
+                    market: this.market.name
+                }
+            );
         }
         log.info(
             "Maker %s market's Open Order Accounts: ",
@@ -140,7 +148,7 @@ export class Market {
         );
     }
 
-    public async placeOrders(n: number) {
+    public async placeOrders(n: number, orderCounter: Prometheus.Counter) {
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < n; j++) {
                 const id = this.market.openOrderAccounts[i].account.address.toBase58().slice(0, 5) + "_" + i + "_" + j;
@@ -153,6 +161,14 @@ export class Market {
                     this.market.maker.user.provider
                 );
                 this.market.openOrderAccounts[i].account.openOrders.push(order);
+                orderCounter.inc(
+                    {
+                        type: "ask",
+                        owner: this.market.maker.user.account.publicKey.toBase58(),
+                        market: this.market.name,
+                        tradingAccount: this.market.openOrderAccounts[i].account.address.toBase58()
+                    }
+                );
             }
             log.info(
                 "Maker %s: market's %s OpenOrderAcc %s, open orders: ",
@@ -164,18 +180,25 @@ export class Market {
         }
     }
 
-    public async settleFunds() {
+    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram) {
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < this.market.openOrderAccounts[i].account.openOrders.length; j++) {
                 const id = this.market.openOrderAccounts[i].account.openOrders[j]["orderPlacedTxSig"].slice(0, 5) + "_" + i + "_" + j;
                 await settleFunds(
                     id,
+                    settleFundsHistogram,
                     this.market.maker.user.account,
                     this.market.maker.user.wallet,
                     this.market.address,
                     this.market.openOrderAccounts[i].account.address,
                     this.market.maker.user.client,
                     this.market.maker.user.provider
+                );
+                settleFundsCounter.inc(
+                    {
+                        owner: this.market.maker.user.account.publicKey.toBase58(),
+                        market: this.market.name
+                    }
                 );
             };
         }

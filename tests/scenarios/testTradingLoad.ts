@@ -34,6 +34,48 @@ const userCounter = new Prometheus.Counter({
 });
 metrics.registerMetric(userCounter);
 
+const marketCounter = new Prometheus.Counter({
+    name: 'markets_number',
+    help: 'number of Markets',
+    labelNames: ['name', 'owner']
+});
+metrics.registerMetric(marketCounter);
+
+const tradingAccountCounter = new Prometheus.Counter({
+    name: 'trading_account_number_by_owner',
+    help: 'number of trading accounts per owner (Maker)',
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(tradingAccountCounter);
+
+const orderCounter = new Prometheus.Counter({
+    name: 'orders_number_by_type',
+    help: 'number of orders',
+    labelNames: ['type', 'owner', 'market', 'tradingAccount']
+});
+metrics.registerMetric(orderCounter);
+
+const takeOrderCounter = new Prometheus.Counter({
+    name: 'take_orders_number_by_type',
+    help: 'number of take orders',
+    labelNames: ['type', 'owner', 'market']
+});
+metrics.registerMetric(takeOrderCounter);
+
+const settleFundsCounter = new Prometheus.Counter({
+    name: 'settle_funds_number_by_owner',
+    help: 'number of executed orders by Makers',
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(settleFundsCounter);
+
+const settleFundsHistogram = new Prometheus.Histogram({
+    name: "settle_funds_duration_seconds",
+    help: "time to consume funds from an executed order",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(settleFundsHistogram);
+
 
 async function runTradingProcess() {
     const ordersNumberPerOpenOrderAccount = tradingConfig.common.oredrsPerTradingAccount;
@@ -79,8 +121,6 @@ async function runTradingProcess() {
         userCounter.inc({ type: "Taker" });
     }
 
-    await metrics.sendMetrics();
-
     // Signers: all Makers and Takers
     let signers: Keypair[] = [];
     for (let i = 0; i < makersNumber; i++) {
@@ -107,19 +147,26 @@ async function runTradingProcess() {
                 mk.market.baseMint,
                 makers[i].user.client
             ));
+            marketCounter.inc(
+                {
+                    name: quote["name"] + "-" + base["name"],
+                    owner: makers[i].user.account.publicKey.toBase58()
+                }
+            );
             makers[i].user.markets.push(mk);
         }
         log.info("Maker's %s markets: ", makers[i].user.account.publicKey, makers[i].user.markets);
     }
 
+
     // create Open Orders Accounts (for Makers only)
     for (let j = 0; j < makers.length; j++) {
-        await makers[j].createOpenOrderAccounts(openOrderAccountsNumber);
+        await makers[j].createOpenOrderAccounts(openOrderAccountsNumber, tradingAccountCounter);
     }
 
     // place orders to sell 10 base tokens per one order
     for (let j = 0; j < makers.length; j++) {
-        await makers[j].placeAskOrders(ordersNumberPerOpenOrderAccount);
+        await makers[j].placeAskOrders(ordersNumberPerOpenOrderAccount, orderCounter);
     }
 
     // takers place their own orders to buy 10 base tokens
@@ -135,6 +182,13 @@ async function runTradingProcess() {
                         takers[i].user.client,
                         takers[i].user.provider
                     );
+                    takeOrderCounter.inc(
+                        {
+                            market: makers[i].user.markets[j].market.name,
+                            owner: takers[i].user.account.publicKey.toBase58(),
+                            type: "bid"
+                        }
+                    );
                 }
             }
         }
@@ -142,6 +196,8 @@ async function runTradingProcess() {
 
     // execute the deals
     for (let j = 0; j < makers.length; j++) {
-        await makers[j].settleFunds();
+        await makers[j].settleFunds(settleFundsCounter, settleFundsHistogram);
     }
+
+    await metrics.sendMetrics();
 }
