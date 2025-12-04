@@ -2,15 +2,13 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { IMaker, ITaker, IMarket, IOpenOrderAccount } from "../utils/interfaces";
-import { SolanaClient, connection } from "../utils/solanaClient";
+import { connection } from "../utils/solanaClient";
 import {
     createOpenOrders,
     placeOrder,
     settleFunds
 } from "../openbook/actions";
 import { log } from "../utils/helpers";
-
-const solanaClient = new SolanaClient();
 
 export class Maker {
     public user: IMaker = {

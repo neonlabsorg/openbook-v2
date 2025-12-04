@@ -1,16 +1,18 @@
 import { command, run } from "cmd-ts";
 import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { log } from "../utils/helpers";
+import { Metrics } from "../utils/metricsManager";
 import { Maker, Taker, Market } from "../openbook/core";
-import config from '../config';
+import config from "../config";
 import {
     createMarket,
     placeTakeOrder,
 } from "../openbook/actions";
 import tradingConfig from "../tradingConfig";
+import Prometheus from "prom-client";
 
 const app = command({
     name: "runTradingProcess",
@@ -22,13 +24,24 @@ const app = command({
 
 run(app, process.argv.slice(2));
 
+// metrics server
+const metrics = new Metrics(8080);
+
+const userCounter = new Prometheus.Counter({
+    name: 'users_number_by_type',
+    help: 'number of Makers and Takers',
+    labelNames: ['type']
+});
+metrics.registerMetric(userCounter);
+
+
 async function runTradingProcess() {
     const ordersNumberPerOpenOrderAccount = tradingConfig.common.oredrsPerTradingAccount;
     const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
-    // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker, one Taker can place orders in range [0, 40))
-    const takersNumber = tradingConfig.common.makers * tradingConfig.common.tradingAccountsPerMakersMarket;
     const marketsNumber = tradingConfig.common.markets;
+    // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker, one Taker can place orders in range [0, 40))
+    const takersNumber = makersNumber * marketsNumber * openOrderAccountsNumber;
 
     const solanaClient = new SolanaClient();
     const programId = new PublicKey(config.accounts.programId);
@@ -49,6 +62,7 @@ async function runTradingProcess() {
 
         log.info("[id_%s] Maker: %s", i, maker.user.account.publicKey.toBase58());
         makers.push(maker);
+        userCounter.inc({ type: "Maker" });
     }
 
     // Takers
@@ -62,7 +76,10 @@ async function runTradingProcess() {
         taker.setClient(new OpenBookV2Client(taker.user.provider, programId))
         log.info("[id_%s] Taker: %s", i, taker.user.account.publicKey.toBase58());
         takers.push(taker);
+        userCounter.inc({ type: "Taker" });
     }
+
+    await metrics.sendMetrics();
 
     // Signers: all Makers and Takers
     let signers: Keypair[] = [];
