@@ -174,18 +174,18 @@ async function runTradingProcess() {
         for (let j = 0; j < marketsNumber; j++) {
             for (let k = 0; k < openOrderAccountsNumber; k++) {
                 for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
-                    const id = i + "_" + j + "_" + k + "_" + m;
+                    const id: number = k + 2 * i * openOrderAccountsNumber + j * openOrderAccountsNumber;
                     await placeTakeOrder(
                         id,
-                        takers[i].user.account,
+                        takers[id].user.account,
                         makers[i].user.markets[j].market.address,
-                        takers[i].user.client,
-                        takers[i].user.provider
+                        takers[id].user.client,
+                        takers[id].user.provider
                     );
                     takeOrderCounter.inc(
                         {
                             market: makers[i].user.markets[j].market.name,
-                            owner: takers[i].user.account.publicKey.toBase58(),
+                            owner: takers[id].user.account.publicKey.toBase58(),
                             type: "bid"
                         }
                     );

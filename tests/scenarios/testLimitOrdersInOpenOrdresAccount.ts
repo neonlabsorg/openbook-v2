@@ -5,6 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { log } from "../utils/helpers";
 import config from '../config';
+import { Metrics } from "../utils/metricsManager";
 import {
     createMarket,
     createOpenOrders,
@@ -14,6 +15,7 @@ import {
     getMarketOpenOrders,
     getUserOpenOrders
 } from "../openbook/actions";
+import Prometheus from "prom-client";
 
 const ordersNumber = option({
     type: number,
@@ -36,6 +38,15 @@ const app = command({
 });
 
 run(app, process.argv.slice(2));
+
+const metrics = new Metrics(8080);
+
+const settleFundsHistogram = new Prometheus.Histogram({
+    name: "settle_funds_duration_seconds",
+    help: "time to consume funds from an executed order",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(settleFundsHistogram);
 
 async function runTradingProcess(ordersNumber: number) {
     const solanaClient = new SolanaClient();
@@ -79,6 +90,15 @@ async function runTradingProcess(ordersNumber: number) {
     }
     // execute the deal
     for (let i = 0; i < ordersNumber; i++) {
-        await settleFunds(i, makerKeypair, makerWallet, marketAddress, openOrdersAccount, clientMaker, providerMaker);
+        await settleFunds(
+            i,
+            settleFundsHistogram,
+            makerKeypair,
+            makerWallet,
+            marketAddress,
+            openOrdersAccount,
+            clientMaker,
+            providerMaker
+        );
     }
 }
