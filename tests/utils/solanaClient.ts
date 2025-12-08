@@ -2,7 +2,7 @@ import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction,
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
 import { getRandomName } from "./helpers";
 import config from '../config';
-import { log } from "./helpers";
+import { log, retry } from "./helpers";
 import tradingConfig from '../tradingConfig';
 
 export const connection = new Connection(config.RPC, 'confirmed');
@@ -59,21 +59,12 @@ export class SolanaClient {
             );
 
             if ((i + 1) % 10 == 0) {
-                const signature = await sendAndConfirmTransaction(
-                    connection,
-                    transaction,
-                    [payers[0]]
-                );
+                const signature = await retry(sendAndConfirmTransaction, [connection, transaction, [payers[0]]], 5, "deploySPLToken");
                 log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
                 transaction = new Transaction();
             }
         }
-
-        const signature = await sendAndConfirmTransaction(
-            connection,
-            transaction,
-            [payers[0]]
-        );
+        const signature = await retry(sendAndConfirmTransaction, [connection, transaction, [payers[0]]], 5, "deploySPLToken");
         log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
 
         return mint;

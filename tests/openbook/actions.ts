@@ -221,7 +221,7 @@ export async function settleFunds(
 
     const end = metric.startTimer();
     const tx = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
-    end({owner: makerWallet.publicKey.toBase58()});
+    end();
     log.info("[id_%s] SettleFunds tx sig: %s", id, tx);
 }
 

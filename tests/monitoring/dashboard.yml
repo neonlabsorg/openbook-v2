@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -92,7 +92,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "description": "Listed Markets. Owner is a Maker who created this trading pair and has an authority: to consume market events, to settle funds and to close the market. ",
       "fieldConfig": {
@@ -172,7 +172,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "description": "Number of trading accounts per Maker",
       "fieldConfig": {
@@ -244,7 +244,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -326,7 +326,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -392,7 +392,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -506,7 +506,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "description": "Executed orders from Orderbook",
       "fieldConfig": {
@@ -584,7 +584,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "description": "",
       "fieldConfig": {
@@ -714,7 +714,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "cf63d9dmwitxce"
+        "uid": "PBFA97CFB590B2093"
       },
       "fieldConfig": {
         "defaults": {
@@ -777,12 +777,28 @@
               "id": "byName",
               "options": "Quantile 99, Settle Funds tx duration"
             },
+            "properties": []
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "Quantile 99, Settle Funds tx duration"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
             "properties": [
               {
-                "id": "color",
+                "id": "custom.hideFrom",
                 "value": {
-                  "fixedColor": "purple",
-                  "mode": "fixed"
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
                 }
               }
             ]
@@ -817,7 +833,7 @@
             "uid": "cf63d9dmwitxce"
           },
           "editorMode": "builder",
-          "expr": "quantile(0.99, settle_funds_duration_seconds_sum{job=\"monitoring\"})",
+          "expr": "histogram_quantile(0.99, settle_funds_duration_seconds_bucket{instance=\"host.docker.internal:8080\"})",
           "legendFormat": "Quantile 99, Settle Funds tx duration",
           "range": true,
           "refId": "A"
@@ -835,12 +851,12 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-10m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "OpenbookV2",
   "uid": "gzcr4v",
-  "version": 30
+  "version": 3
 }

@@ -11,6 +11,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     volumes:
+      - ./:/var/lib/grafana
       - ./:/etc/grafana/provisioning/datasources/
     ports:
       - 3000:3000

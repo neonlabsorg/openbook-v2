@@ -78,12 +78,21 @@ metrics.registerMetric(settleFundsHistogram);
 
 
 async function runTradingProcess() {
+    log.info("Start trading load to rpc url: %s", config.RPC);
+    log.info("OpenbookV2 program_id: %s", config.accounts.programId);
     const ordersNumberPerOpenOrderAccount = tradingConfig.common.oredrsPerTradingAccount;
     const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
     const marketsNumber = tradingConfig.common.markets;
     // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker, one Taker can place orders in range [0, 40))
     const takersNumber = makersNumber * marketsNumber * openOrderAccountsNumber;
+
+    log.info("Makers number: %s", makersNumber);
+    log.info("Takers number: %s", takersNumber);
+    log.info("Trading pairs number: %s", marketsNumber);
+    log.info("Open Order Accounts per Maker: %s", openOrderAccountsNumber);
+    log.info("Orders number per Open Order Account: %s", ordersNumberPerOpenOrderAccount);
+    log.info("Common number of orders in orderbook: ", makersNumber * marketsNumber * openOrderAccountsNumber * ordersNumberPerOpenOrderAccount);
 
     const solanaClient = new SolanaClient();
     const programId = new PublicKey(config.accounts.programId);
@@ -168,6 +177,7 @@ async function runTradingProcess() {
     for (let j = 0; j < makers.length; j++) {
         await makers[j].placeAskOrders(ordersNumberPerOpenOrderAccount, orderCounter);
     }
+    await metrics.sendMetrics();
 
     // takers place their own orders to buy 10 base tokens
     for (let i = 0; i < makersNumber; i++) {
@@ -193,6 +203,7 @@ async function runTradingProcess() {
             }
         }
     }
+    await metrics.sendMetrics();
 
     // execute the deals
     for (let j = 0; j < makers.length; j++) {
