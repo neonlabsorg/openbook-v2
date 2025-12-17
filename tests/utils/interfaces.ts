@@ -29,5 +29,13 @@ export interface ITaker {
 
 export interface IOpenOrderAccount {
     address: PublicKey;
+    marketAddress: PublicKey;
     openOrders: Object[];
+}
+
+export interface Balances {
+    account: PublicKey;
+    marketName: string;
+    quote: bigint;
+    base: bigint;
 }

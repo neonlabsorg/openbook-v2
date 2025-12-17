@@ -10,7 +10,7 @@ export const connection = new Connection(config.RPC, 'confirmed');
 export class SolanaClient {
     async createAccountWithBalance(balance = tradingConfig.consts.initialAccountBalance): Promise<Keypair> {
         const kp = Keypair.generate();
-        await this.fundAccount(kp.publicKey, balance);
+        await this.fundAccount(kp.publicKey, Math.round(balance));
         return kp;
     };
 
@@ -64,9 +64,10 @@ export class SolanaClient {
                 transaction = new Transaction();
             }
         }
-        const signature = await retry(sendAndConfirmTransaction, [connection, transaction, [payers[0]]], 5, "deploySPLToken");
-        log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
-
+        if (transaction.instructions.length != 0) {
+            const signature = await retry(sendAndConfirmTransaction, [connection, transaction, [payers[0]]], 5, "deploySPLToken");
+            log.info('SIGNATURE token %s deploying: %s', mint.toBase58(), signature);
+        }
         return mint;
     };
 

@@ -1,7 +1,7 @@
 import { command, number, option, run } from "cmd-ts";
 import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Keypair } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { log } from "../utils/helpers";
 import config from '../config';
@@ -16,6 +16,7 @@ import {
     getUserOpenOrders
 } from "../openbook/actions";
 import Prometheus from "prom-client";
+import { MintUtils } from "../utils/mintUtils";
 
 const ordersNumber = option({
     type: number,
@@ -70,6 +71,27 @@ async function runTradingProcess(ordersNumber: number) {
     const marketName = quote["name"] + "-" + base["name"];
     const marketAddress = await createMarket(makerWallet, marketName, quote["mint"], base["mint"], clientMaker);
 
+    let makerTokensBalancesBefore: Object = {};
+    let makerTokensBalancesAfter: Object = {};
+    let takerTokenBalancesBefore: Object = {};
+    let takerTokenBalancesAfter: Object = {};
+
+    const balances = await getPairBalances(
+        providerMaker,
+        quote["mint"],
+        base["mint"],
+        makerKeypair
+    )
+    makerTokensBalancesBefore[`Maker_${makerKeypair.publicKey}`] = balances;
+
+    const balancesTaker = await getPairBalances(
+        providerTaker,
+        quote["mint"],
+        base["mint"],
+        takerKeypair
+    )
+    takerTokenBalancesBefore[`Taker_${takerKeypair.publicKey}`] = balancesTaker;
+
     // create Open Orders Account (for Maker only)
     const openOrdersAccount = await createOpenOrders(0, makerWallet, marketAddress, marketName, clientMaker);
 
@@ -101,4 +123,41 @@ async function runTradingProcess(ordersNumber: number) {
             providerMaker
         );
     }
+
+    const balancesAfter = await getPairBalances(
+        providerMaker,
+        quote["mint"],
+        base["mint"],
+        makerKeypair
+    )
+    makerTokensBalancesAfter[`Maker_${makerKeypair.publicKey}`] = balancesAfter;
+    log.info("Tokens balance before: ", makerTokensBalancesBefore);
+    log.info("Tokens balance after: ", makerTokensBalancesAfter);
+
+    const balancesTakerAfter = await getPairBalances(
+        providerTaker,
+        quote["mint"],
+        base["mint"],
+        takerKeypair
+    )
+    takerTokenBalancesAfter[`Taker_${takerKeypair.publicKey}`] = balancesTakerAfter;
+    log.info("Tokens balance before: ", takerTokenBalancesBefore);
+    log.info("Tokens balance after: ", takerTokenBalancesAfter);
+}
+
+async function getPairBalances(provider: AnchorProvider, quoteMint: PublicKey, baseMint: PublicKey, account: Keypair): Promise<Object> {
+    const mintUtils = new MintUtils(provider.connection, account);
+    const userQuoteAcc = await mintUtils.getOrCreateTokenAccount(
+        quoteMint,
+        account,
+        account.publicKey
+    );
+
+    const userBaseAcc = await mintUtils.getOrCreateTokenAccount(
+        baseMint,
+        account,
+        account.publicKey
+    );
+
+    return { "quoteBalance": userQuoteAcc.amount.toString(), "baseBalance": userBaseAcc.amount.toString() };
 }

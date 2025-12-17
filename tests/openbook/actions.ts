@@ -19,6 +19,7 @@ import {
 } from "@openbook-dex/openbook-v2";
 import Prometheus from "prom-client";
 
+const quantity = tradingConfig.orders.tradeQuantity;
 
 export async function createMarket(
     wallet: Wallet,
@@ -55,7 +56,13 @@ export async function createMarket(
 
     const marketAddress = ixs[ixs.length - 1].keys[0].pubkey.toBase58();
     log.info("SIGNATURE market creation: %s", tx);
-    log.info("Deployed market %s at %s. Quote mint: %s, Base mint: %s", marketName, marketAddress, quoteMint.toBase58(), baseMint.toBase58());
+    log.info(
+        "Deployed market %s at %s. Quote mint: %s, Base mint: %s",
+        marketName,
+        marketAddress,
+        quoteMint.toBase58(),
+        baseMint.toBase58()
+    );
     return ixs[ixs.length - 1].keys[0].pubkey;
 }
 
@@ -79,7 +86,6 @@ export async function placeOrder(
     openbookClient: OpenBookV2Client,
     provider: AnchorProvider
 ): Promise<Object> {
-    const quantity = tradingConfig.orders.tradeQuantity;
     const market = await openbookClient.program.account.market.fetch(marketAddress);
     const mintUtils = new MintUtils(provider.connection, makerKeypair);
 
@@ -93,7 +99,7 @@ export async function placeOrder(
         side: SideUtils.Ask,  // SELLING base token
         priceLots: uiPriceToLots(market, 25),  // Selling at $25
         maxBaseLots: uiBaseToLots(market, quantity),  // Selling base tokens
-        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 3 * quantity),
+        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 30 * quantity),
         clientOrderId: new BN(Date.now()),
         orderType: PlaceOrderTypeUtils.Limit,  // Limit order - will rest on book
         expiryTimestamp: new BN(0),
@@ -142,8 +148,8 @@ export async function placeTakeOrder(
     const args: PlaceOrderArgs = {
         side: SideUtils.Bid,  // BUYING base token
         priceLots: uiPriceToLots(market, 30),  // Willing to pay up to $30
-        maxBaseLots: uiBaseToLots(market, 10),  // Buying 10 base tokens
-        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 1000),  // Max $350 spend
+        maxBaseLots: uiBaseToLots(market, quantity),  // Buying 10 base tokens
+        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 100 * quantity),  // Max $350 spend
         clientOrderId: new BN(Date.now()),
         orderType: PlaceOrderTypeUtils.Market,
         expiryTimestamp: new BN(0),

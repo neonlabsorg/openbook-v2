@@ -14,6 +14,8 @@ const tradingConfig = {
     },
     orders: {
         tradeQuantity: 10, // token's quantity to buy or to sell per one order
+        tradePrice: 25, // token's price to sell or buy
+        makerFee: 1000
     }
 }
 

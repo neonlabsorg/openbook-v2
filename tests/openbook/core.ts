@@ -40,11 +40,13 @@ export class Maker {
         this.user.markets = markets;
     }
 
-    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter) {
+    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter): Promise<OpenOrderAccount[]> {
+        let result: OpenOrderAccount[] = [];
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].createOpenOrderAccounts(n, accountCounter);
-
+            const accounts = await this.user.markets[j].createOpenOrderAccounts(n, accountCounter);
+            result.push(...accounts);
         };
+        return result;
     }
 
     public async placeAskOrders(n: number, orderCounter: Prometheus.Counter) {
@@ -119,7 +121,7 @@ export class Market {
         this.market.openOrderAccounts = openOrderAccounts;
     }
 
-    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter) {
+    public async createOpenOrderAccounts(n: number, accountCounter: Prometheus.Counter): Promise<OpenOrderAccount[]> {
         for (let k = 0; k < n; k++) {
             let openOrderAccount = new OpenOrderAccount();
             const id = k.toString() + "_" + this.market.maker.user.account.publicKey.toBase58().slice(0, 5);
@@ -132,6 +134,7 @@ export class Market {
             );
 
             openOrderAccount.setAddress(account);
+            openOrderAccount.setMarketAddress(this.market.address);
 
             this.market.openOrderAccounts.push(openOrderAccount);
             accountCounter.inc(
@@ -146,6 +149,7 @@ export class Market {
             this.market.maker.user.account.publicKey.toBase58(),
             this.market.openOrderAccounts
         );
+        return this.market.openOrderAccounts;
     }
 
     public async placeOrders(n: number, orderCounter: Prometheus.Counter) {
@@ -208,11 +212,16 @@ export class Market {
 export class OpenOrderAccount {
     public account: IOpenOrderAccount = {
         address: new Keypair().publicKey,
+        marketAddress: new Keypair().publicKey,
         openOrders: []
     }
 
     public setAddress(account: PublicKey) {
         this.account.address = account;
+    }
+
+    public setMarketAddress(address: PublicKey) {
+        this.account.marketAddress = address;
     }
 
     public setOpenOrders(orders: Object[]) {
