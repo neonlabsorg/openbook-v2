@@ -8,19 +8,19 @@ import tradingConfig from '../tradingConfig';
 export const connection = new Connection(config.RPC, 'confirmed');
 
 export class SolanaClient {
-    async createAccountWithBalance(balance = tradingConfig.consts.initialAccountBalance): Promise<Keypair> {
+    async createAccountWithBalance(balance: number = tradingConfig.consts.initialAccountBalance): Promise<Keypair> {
         const kp = Keypair.generate();
         await this.fundAccount(kp.publicKey, Math.round(balance));
         return kp;
     };
 
-    async fundAccount(accountPublicKey, balance) {
-        const signature = await connection.requestAirdrop(accountPublicKey, balance * LAMPORTS_PER_SOL);
+    async fundAccount(account: PublicKey, balance: number) {
+        const signature = await connection.requestAirdrop(account, balance * LAMPORTS_PER_SOL);
         await connection.confirmTransaction(signature);
     }
 
-    async getBalance(accountPublicKey) {
-        return await connection.getBalance(accountPublicKey);
+    async getBalance(account: PublicKey) {
+        return await connection.getBalance(account);
     }
 
     async deploySPLToken(payers: Keypair[], decimals: number): Promise<PublicKey> {
@@ -71,10 +71,10 @@ export class SolanaClient {
         return mint;
     };
 
-    async createToken(type: string, payers: Keypair[], decimals: number): Promise<Object> {
+    async createToken(type: string, payers: Keypair[], decimals: number): Promise<{ name: string; mint: PublicKey }> {
         const name = getRandomName();
         const mint = await this.deploySPLToken(payers, decimals);
         log.info("%s token %s with mint %s created", type, name, mint.toBase58());
-        return { "name": name, "mint": mint };
+        return { name, mint };
     }
 }

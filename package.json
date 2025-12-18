@@ -35,6 +35,7 @@
     "@openbook-dex/openbook-v2": "^0.2.10",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.77.3",
+    "@types/express": "^5.0.6",
     "big.js": "^6.2.1",
     "bs58": "^6.0.0",
     "cmd-ts": "^0.14.3",

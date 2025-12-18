@@ -1,7 +1,10 @@
-import { log } from "./helpers";
 import Prometheus from "prom-client";
+import express from "express";
+import { Express } from "express";
+import type { Server } from "http";
+import { log } from "./helpers";
 
-const express = require('express');
+
 const application = express();
 
 const register = new Prometheus.Registry();
@@ -11,29 +14,37 @@ register.setDefaultLabels({
 });
 
 export class Metrics {
-    private server;
+    private server: Server;
+    private readonly app: Express;
 
     constructor(port: number) {
-        this.server = application.listen(port, () => {
+        this.app = application;
+        this.setupMetricsEndpoint();
+        this.server = this.app.listen(port, () => {
             log.info(`Metrics app running at http://localhost:${port}`);
         });
     }
 
-    public async sendMetrics() {
-        application.get('/metrics', async (req, res) => {
-            res.setHeader('Content-Type', Prometheus.register.contentType);
-            const metrics = await Prometheus.register.metrics();
+    public setupMetricsEndpoint(): void {
+        this.app.get('/metrics', async (_req, res) => {
+            res.setHeader('Content-Type', register.contentType);
+            const metrics = await register.metrics();
             res.send(metrics);
-            log.info("Send collected metrics to db");
+            log.info("Metrics endpoint accessed");
         });
     }
 
-    public registerMetric(metric) {
+    public registerMetric(metric: Prometheus.Metric<string>): void {
         register.registerMetric(metric);
     }
 
-    public close() {
-        this.server.close();
-        log.info("Close Metrics app");
+    public async sendMetrics(): Promise<void> {
+        await register.metrics();
+    }
+
+    public close(): void {
+        this.server.close(() => {
+            log.info("Metrics app closed");
+        });
     }
 }

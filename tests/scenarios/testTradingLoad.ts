@@ -15,13 +15,15 @@ import {
 import tradingConfig from "../tradingConfig";
 import Prometheus from "prom-client";
 import { MintUtils } from "../utils/mintUtils";
-import { access } from "fs";
 
 const app = command({
     name: "runTradingProcess",
     args: {},
     handler: () => {
-        runTradingProcess();
+        runTradingProcess().catch((error) => {
+            log.error("Error in trading process: %s", error);
+            process.exit(1);
+        });
     },
 });
 
@@ -80,10 +82,10 @@ const settleFundsHistogram = new Prometheus.Histogram({
 metrics.registerMetric(settleFundsHistogram);
 
 
-async function runTradingProcess() {
+async function runTradingProcess(): Promise<void> {
     log.info("Start trading load to rpc url: %s", config.RPC);
     log.info("OpenbookV2 program_id: %s", config.accounts.programId);
-    const ordersNumberPerOpenOrderAccount = tradingConfig.common.oredrsPerTradingAccount;
+    const ordersNumberPerOpenOrderAccount = tradingConfig.common.ordersPerTradingAccount;
     const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
     const marketsNumber = tradingConfig.common.markets;
@@ -129,6 +131,7 @@ async function runTradingProcess() {
         makers.push(maker);
         userCounter.inc({ type: "Maker" });
     }
+    await metrics.sendMetrics();
 
     // Takers
     let takers: Taker[] = [];
@@ -143,6 +146,8 @@ async function runTradingProcess() {
         takers.push(taker);
         userCounter.inc({ type: "Taker" });
     }
+    await metrics.sendMetrics();
+
 
     // Signers: all Makers and Takers
     let signers: Keypair[] = [];
@@ -229,6 +234,7 @@ async function runTradingProcess() {
     }
     await metrics.sendMetrics();
 
+    // place take orders to buy 10 base tokens per one take order
     for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
         for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
             const id = `${k}_${m}`

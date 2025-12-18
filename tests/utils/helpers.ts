@@ -7,12 +7,14 @@ export function getRandomName(): string {
     return Math.random().toString(36).toUpperCase().replace(/[0-9O]/g, '').substring(1, length + 1);
 }
 
-export var log = require('tracer').console({
+import tracer from 'tracer';
+
+export const log = tracer.console({
     format: '{{timestamp}} [{{title}}]:: {{message}}',
     dateformat: 'HH:MM:ss.L'
 });
 
-export async function retry<T extends (...arg0: any[]) => any>(
+export async function retry<T extends (...args: any[]) => any>(
     fn: T,
     args: Parameters<T>,
     maxRetry: number,
@@ -29,7 +31,7 @@ export async function retry<T extends (...arg0: any[]) => any>(
             log.error(`${maxRetry} retry attempts reached`);
             throw error;
         }
-        sleep(500);
+        await sleep(500);
         return retry(fn, args, maxRetry, label, current + 1);
     }
 }
