@@ -10,6 +10,8 @@ yarn build
 yarn ts-node ./tests/scenarios/testTradingLoad.ts
 ```
 
+set RPC and program Pubkey in ./config.ts
+
 set trading config ./tradingConfig.ts
 
 ```JSON
@@ -18,7 +20,7 @@ const tradingConfig = {
         makers: 2, // number of Makers
         markets: 2, //number of trading pairs per Maker
         tradingAccountsPerMakersMarket: 4, // number of OpenOrdersAccount per each Maker
-        oredrsPerTradingAccount: 2, // number of orders per each Trading account, range [0, 24)
+        oredrsPerTradingAccount: 2, // number of orders per each Trading account, range [0, 24]
         ordersDistributionStrategy: "HalfSellHalfBuy", // number of orders with side ask = all order's number / 2, number of orders with side bid = all order's number / 2
     },
     consts: {

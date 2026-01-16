@@ -1,5 +1,5 @@
 import { BN } from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, TransactionMessage } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "../utils/mintUtils";
@@ -15,7 +15,7 @@ import {
     uiQuoteToLots,
     PlaceOrderTypeUtils,
     SelfTradeBehaviorUtils,
-    findAllMarkets
+    findAllMarkets,
 } from "@openbook-dex/openbook-v2";
 import Prometheus from "prom-client";
 
@@ -45,25 +45,51 @@ export async function createMarket(
         wallet.publicKey
     );
 
-    let tx;
-    try {
-        tx = await openbookClient.sendAndConfirmTransaction(ixs, {
-            additionalSigners: signers,
-        });
-    } catch (error) {
-        log.error("Error fetching data: %s", error);
+    for (let i = 0; i < signers.length; i++) {
+        log.info("Signers for market creation: ", signers[i].publicKey)
     }
 
-    const marketAddress = ixs[ixs.length - 1].keys[0].pubkey.toBase58();
-    log.info("SIGNATURE market creation: %s", tx);
-    log.info(
-        "Deployed market %s at %s. Quote mint: %s, Base mint: %s",
-        marketName,
-        marketAddress,
-        quoteMint.toBase58(),
-        baseMint.toBase58()
-    );
-    return ixs[ixs.length - 1].keys[0].pubkey;
+    try {
+        const sig = await openbookClient.sendAndConfirmTransaction(ixs, {
+            additionalSigners: signers,
+        });
+        const marketAddress = ixs[ixs.length - 1].keys[0].pubkey.toBase58();
+        log.info("SIGNATURE market creation: %s", sig);
+        log.info(
+            "Deployed market %s at %s. Quote mint: %s, Base mint: %s",
+            marketName,
+            marketAddress,
+            quoteMint.toBase58(),
+            baseMint.toBase58()
+        );
+        return ixs[ixs.length - 1].keys[0].pubkey;
+    } catch (error) {
+        log.error("Error fetching Market: ", error);
+        process.exit(1);
+    }
+}
+
+export async function createOpenOrdersIndexer(
+    id: string | number,
+    wallet: Wallet,
+    marketAddress: PublicKey,
+    openbookClient: OpenBookV2Client
+): Promise<PublicKey> {
+    try {
+        const [ix, account] = await openbookClient.createOpenOrdersIx(marketAddress, "my_index", wallet.payer.publicKey, null, null);
+
+        try {
+            const sig = await openbookClient.sendAndConfirmTransaction(ix, { additionalSigners: wallet.payer.publicKey });
+            log.info("[id_%s] Open Orders Indexer created: %s, signature: %s", id, account.toBase58(), sig);
+            return account;
+        } catch (error) {
+            log.error("Error fetching Order: %s", error);
+            process.exit(1);
+        }
+    } catch (error) {
+        log.error("Error fetching Open Orders Indexer: ", error);
+        process.exit(1);
+    }
 }
 
 export async function createOpenOrders(
@@ -73,9 +99,14 @@ export async function createOpenOrders(
     marketName: string,
     openbookClient: OpenBookV2Client
 ): Promise<PublicKey> {
-    const openOrdersAccount = await openbookClient.createOpenOrders(wallet.payer, marketAddress, marketName);
-    log.info("[id_%s] Open Orders Account created: %s", id, openOrdersAccount.toBase58());
-    return openOrdersAccount;
+    try {
+        const account = await openbookClient.createOpenOrders(wallet.payer, marketAddress, marketName);
+        log.info("[id_%s] Open Orders Account created: %s", id, account.toBase58());
+        return account;
+    } catch (error) {
+        log.error("Error fetching Open Orders Account: ", error);
+        process.exit(1);
+    }
 }
 
 export async function placeOrder(
@@ -118,9 +149,14 @@ export async function placeOrder(
         []
     );
 
-    const tx = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
-    log.info("[id_%s] Order placed. Timestamp: %s, signature: %s", id, timestamp, tx);
-    return { "timestamp": timestamp, "orderPlacedTxSig": tx };
+    try {
+        const sig = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
+        log.info("[id_%s] Order placed. Timestamp: %s, signature: %s", id, timestamp, sig);
+        return { "timestamp": timestamp, "orderPlacedTxSig": sig };
+    } catch (error) {
+        log.error("Error fetching Order: ", error);
+        process.exit(1);
+    }
 }
 
 export async function placeTakeOrder(
@@ -129,7 +165,7 @@ export async function placeTakeOrder(
     marketAddress: PublicKey,
     openbookClient: OpenBookV2Client,
     provider: AnchorProvider
-) {
+): Promise<void> {
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const mintUtils = new MintUtils(provider.connection, takerKeypair);
@@ -168,36 +204,44 @@ export async function placeTakeOrder(
         remainings
     );
 
-    let tx;
     try {
-        tx = await openbookClient.sendAndConfirmTransaction([ix], signers);
+        const sig = await await openbookClient.sendAndConfirmTransaction([ix], signers);
+        log.info("[id_%s] TakeOrder placed. Tx signature: %s", id, sig);
     } catch (error) {
-        log.error("Error fetching data: %s", error);
+        log.error("Error fetching TakeOrder: ", error);
+        process.exit(1);
     }
-    log.info("[id_%s] TakeOrder placed. Tx signature: %s", id, tx);
 }
 
 export async function settleFunds(
     id: string | number,
-    metric: Prometheus.Histogram,
+    settleFunds: Prometheus.Histogram,
+    consumeEvents: Prometheus.Histogram,
     makerKeypair: Keypair,
     makerWallet: Wallet,
     marketAddress: PublicKey,
     openOrdersAccount: PublicKey,
     openbookClient: OpenBookV2Client,
     provider: AnchorProvider
-) {
+): Promise<void> {
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const consumeEventsIx = await openbookClient.consumeEventsIx(
         marketAddress,
         market,
-        new BN(10), // Limit - process up to 10 events
+        new BN(600),
         [openOrdersAccount]
     );
 
-    const consumeTx = await openbookClient.sendAndConfirmTransaction([consumeEventsIx], {});
-    log.info("[id_%s] ConsumeEventsIx sig: %s", id, consumeTx);
+    try {
+        const end = consumeEvents.startTimer();
+        const sig = await openbookClient.sendAndConfirmTransaction([consumeEventsIx], {});
+        end();
+        log.info("[id_%s] ConsumeEventsIx tx sig: %s", id, sig);
+    } catch (error) {
+        log.error("Error fetching ConsumeEventsIx: ", error);
+        process.exit(1);
+    }
 
     const openOrdersData = await openbookClient.program.account.openOrdersAccount.fetch(openOrdersAccount);
 
@@ -225,10 +269,15 @@ export async function settleFunds(
         makerWallet.publicKey
     );
 
-    const end = metric.startTimer();
-    const tx = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
-    end();
-    log.info("[id_%s] SettleFunds tx sig: %s", id, tx);
+    try {
+        const end = settleFunds.startTimer();
+        const sig = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
+        end();
+        log.info("[id_%s] SettleFunds tx sig: %s", id, sig);
+    } catch (error) {
+        log.error("Error fetching SettleFunds: ", error);
+        process.exit(1);
+    }
 }
 
 export async function getMarkets(
@@ -318,5 +367,4 @@ export async function getTotalAmountsForOpenOrders(
         }
     }
     return result;
-
 }

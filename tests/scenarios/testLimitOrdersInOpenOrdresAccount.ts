@@ -49,6 +49,13 @@ const settleFundsHistogram = new Prometheus.Histogram({
 });
 metrics.registerMetric(settleFundsHistogram);
 
+const consumeEventsHistogram = new Prometheus.Histogram({
+    name: "consume_events_duration_seconds",
+    help: "time to send consumeEvents and tregger token movements",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(consumeEventsHistogram);
+
 async function runTradingProcess(ordersNumber: number) {
     const solanaClient = new SolanaClient();
     const programId = new PublicKey(config.accounts.programId);
@@ -115,6 +122,7 @@ async function runTradingProcess(ordersNumber: number) {
         await settleFunds(
             i,
             settleFundsHistogram,
+            consumeEventsHistogram,
             makerKeypair,
             makerWallet,
             marketAddress,

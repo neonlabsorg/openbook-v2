@@ -3,25 +3,24 @@ import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { log } from "../utils/helpers";
+import { log, sleep } from "../utils/helpers";
 import { Metrics } from "../utils/metricsManager";
 import { Maker, Taker, Market, OpenOrderAccount } from "../openbook/core";
-import { IMarket, Balances } from "../utils/interfaces";
-import config from "../config";
 import {
     createMarket,
     placeTakeOrder,
 } from "../openbook/actions";
+import config from "../config";
 import tradingConfig from "../tradingConfig";
 import Prometheus from "prom-client";
-import { MintUtils } from "../utils/mintUtils";
+
 
 const app = command({
     name: "runTradingProcess",
     args: {},
     handler: () => {
         runTradingProcess().catch((error) => {
-            log.error("Error in trading process: %s", error);
+            log.error("Error in trading process: ", error);
             process.exit(1);
         });
     },
@@ -81,6 +80,12 @@ const settleFundsHistogram = new Prometheus.Histogram({
 });
 metrics.registerMetric(settleFundsHistogram);
 
+const consumeEventsHistogram = new Prometheus.Histogram({
+    name: "consume_events_duration_seconds",
+    help: "time to send consumeEvents and tregger token movements",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(consumeEventsHistogram);
 
 async function runTradingProcess(): Promise<void> {
     log.info("Start trading load to rpc url: %s", config.RPC);
@@ -89,7 +94,7 @@ async function runTradingProcess(): Promise<void> {
     const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
     const marketsNumber = tradingConfig.common.markets;
-    // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker, one Taker can place orders in range [0, 40))
+    // number of Takers (consider 1 Taker per 1 OpenOrdersAccount of a single Maker)
     const takersNumber = makersNumber * marketsNumber * openOrderAccountsNumber;
     const tradeQuantity = tradingConfig.orders.tradeQuantity;
     const ordersPerMaker = marketsNumber * openOrderAccountsNumber * ordersNumberPerOpenOrderAccount;
@@ -116,13 +121,25 @@ async function runTradingProcess(): Promise<void> {
     // Makers
     let makers: Maker[] = [];
 
+    // Collect all promises for account creation
+    const makerAccountPromises: Promise<Keypair>[] = [];
+    for (let i = 0; i < makersNumber; i++) {
+        makerAccountPromises.push(
+            solanaClient.createAccountWithBalance(
+                2 * marketsNumber * tradingConfig.consts.tokenCreation
+                + marketsNumber * tradingConfig.consts.marketCreation
+                + tradingConfig.consts.initialAccountBalance
+            )
+        );
+    }
+
+    // Wait for all accounts to be created
+    const makerAccounts = await Promise.all(makerAccountPromises);
+
+    // Process each account to create maker objects
     for (let i = 0; i < makersNumber; i++) {
         let maker = new Maker();
-        maker.setAccount(await solanaClient.createAccountWithBalance(
-            2 * marketsNumber * tradingConfig.consts.tokenCreation
-            + marketsNumber * tradingConfig.consts.marketCreation
-            + tradingConfig.consts.initialAccountBalance
-        ));
+        maker.setAccount(makerAccounts[i]);
         maker.setWallet(new Wallet(maker.user.account));
         maker.setProvider(new AnchorProvider(connection, maker.user.wallet, { commitment: "confirmed" }));
         maker.setClient(new OpenBookV2Client(maker.user.provider, programId));
@@ -136,9 +153,19 @@ async function runTradingProcess(): Promise<void> {
     // Takers
     let takers: Taker[] = [];
 
+    // Collect all promises for account creation
+    const accountPromises: Promise<Keypair>[] = [];
+    for (let i = 0; i < takersNumber; i++) {
+        accountPromises.push(solanaClient.createAccountWithBalance());
+    }
+
+    // Wait for all accounts to be created
+    const accounts = await Promise.all(accountPromises);
+
+    // Process each account to create taker objects
     for (let i = 0; i < takersNumber; i++) {
         let taker = new Taker();
-        taker.setAccount(await solanaClient.createAccountWithBalance());
+        taker.setAccount(accounts[i]);
         taker.setWallet(new Wallet(taker.user.account));
         taker.setProvider(new AnchorProvider(connection, taker.user.wallet, { commitment: "confirmed" }))
         taker.setClient(new OpenBookV2Client(taker.user.provider, programId))
@@ -161,14 +188,13 @@ async function runTradingProcess(): Promise<void> {
     //Deploy tokens
     let quotes: Object[] = [];
     let bases: Object[] = [];
-    for (let i = 0; i < makers.length; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            const q = await solanaClient.createToken("Quote", signers, 9);
-            quotes.push(q);
-            const b = await solanaClient.createToken("Base", signers, 9);
-            bases.push(b);
-        }
+    for (let i = 0; i < marketsNumber; i++) {
+        const q = await solanaClient.createToken("Quote", signers, 9);
+        quotes.push(q);
+        const b = await solanaClient.createToken("Base", signers, 9);
+        bases.push(b);
     }
+    await metrics.sendMetrics();
 
     // Markets: add markets to Maker's property
     for (let i = 0; i < makers.length; i++) {
@@ -195,10 +221,11 @@ async function runTradingProcess(): Promise<void> {
         }
         log.info("Maker's %s markets: ", makers[i].user.account.publicKey, makers[i].user.markets);
     }
+    await metrics.sendMetrics();
 
     for (let i = 0; i < makersNumber; i++) {
         for (let j = 0; j < marketsNumber; j++) {
-            const balances = await getPairBalances(
+            const balances = await solanaClient.getPairBalances(
                 makers[i].user.provider,
                 makers[i].user.markets[j].market,
                 makers[i].user.account
@@ -210,7 +237,7 @@ async function runTradingProcess(): Promise<void> {
 
     for (let i = 0; i < takers.length; i++) {
         for (let j = 0; j < marketsNumber; j++) {
-            const balances = await getPairBalances(
+            const balances = await solanaClient.getPairBalances(
                 takers[i].user.provider,
                 makers[0].user.markets[j].market,
                 takers[i].user.account
@@ -235,16 +262,25 @@ async function runTradingProcess(): Promise<void> {
     await metrics.sendMetrics();
 
     // place take orders to buy 10 base tokens per one take order
+    const takeOrderPromises: Promise<void>[] = [];
     for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
         for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
             const id = `${k}_${m}`
-            await placeTakeOrder(
+            const promise = placeTakeOrder(
                 id,
                 takers[k].user.account,
                 tradingAccounts[k].account.marketAddress,
                 takers[k].user.client,
                 takers[k].user.provider
             );
+            takeOrderPromises.push(promise);
+        }
+    }
+    await Promise.all(takeOrderPromises);
+
+    // Increment counters after all orders are placed
+    for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
+        for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
             takeOrderCounter.inc(
                 {
                     market: tradingAccounts[k].account.marketAddress.toBase58(),
@@ -256,9 +292,15 @@ async function runTradingProcess(): Promise<void> {
     }
     await metrics.sendMetrics();
 
+    // execute the deals
+    for (let j = 0; j < makers.length; j++) {
+        await makers[j].settleFunds(settleFundsCounter, settleFundsHistogram, consumeEventsHistogram);
+    }
+    await metrics.sendMetrics();
+
     for (let i = 0; i < takers.length; i++) {
         for (let j = 0; j < marketsNumber; j++) {
-            const balances = await getPairBalances(
+            const balances = await solanaClient.getPairBalances(
                 takers[i].user.provider,
                 makers[0].user.markets[j].market,
                 takers[i].user.account
@@ -268,15 +310,31 @@ async function runTradingProcess(): Promise<void> {
         }
     }
 
-    // execute the deals
-    for (let j = 0; j < makers.length; j++) {
-        await makers[j].settleFunds(settleFundsCounter, settleFundsHistogram);
+    const sellAmount = BigInt(makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9);
+    const buyAmount = sellAmount * BigInt(tradingConfig.orders.tradePrice);
+
+    const takerBaseBalancesDiff = takersBaseBalancesAmountAfter - takersBaseBalancesAmount;
+    const takerQuoteBalancesDiff = takersQuoteBalancesAmount - takersQuoteBalancesAmountAfter;
+
+    if (!(takerQuoteBalancesDiff === buyAmount)) {
+        log.error(
+            "Assertion failed, takerQuoteBalances Balances mismatch: %s != %s",
+            takerQuoteBalancesDiff,
+            buyAmount
+        );
     }
-    await metrics.sendMetrics();
+
+    if (!(takerBaseBalancesDiff === sellAmount)) {
+        log.error(
+            "Assertion failed, takerBaseBalances Balances mismatch: %s != %s",
+            takerQuoteBalancesDiff,
+            sellAmount
+        );
+    }
 
     for (let i = 0; i < makersNumber; i++) {
         for (let j = 0; j < marketsNumber; j++) {
-            const balances = await getPairBalances(
+            const balances = await solanaClient.getPairBalances(
                 makers[i].user.provider,
                 makers[i].user.markets[j].market,
                 makers[i].user.account
@@ -287,9 +345,12 @@ async function runTradingProcess(): Promise<void> {
     }
 
     const makerBaseBalancesDiff = makersBaseBalancesAmount - makersBaseBalancesAmountAfter;
-    const sellAmount = BigInt(makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9);
-    const buyAmount = sellAmount * BigInt(tradingConfig.orders.tradePrice);
-    const fee = BigInt(((makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9 * tradingConfig.orders.tradePrice) / tradingConfig.orders.makerFee));
+
+
+    const fee = BigInt(
+        (makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9 * tradingConfig.orders.tradePrice) /
+        tradingConfig.orders.makerFee
+    );
     const makerQuoteBalancesDiff = (
         makersQuoteBalancesAmountAfter
         - makersQuoteBalancesAmount
@@ -298,59 +359,18 @@ async function runTradingProcess(): Promise<void> {
 
     if (!(makerQuoteBalancesDiff === buyAmount)) {
         log.error(
-            "Assertion failed: %s != %s",
+            "Assertion failed, makerQuoteBalances Balances mismatch: %s != %s",
             makerQuoteBalancesDiff,
             buyAmount
         );
-        throw new Error("Balances mismatch");
     }
 
     if (!(makerBaseBalancesDiff === sellAmount)) {
         log.error(
-            "Assertion failed: %s != %s",
+            "Assertion failed, makerBaseBalances Balances mismatch: %s != %s",
             makerBaseBalancesDiff,
             sellAmount
         );
-        throw new Error("Balances mismatch");
     }
 
-    const takerBaseBalancesDiff = takersBaseBalancesAmountAfter - takersBaseBalancesAmount;
-    const takerQuoteBalancesDiff = takersQuoteBalancesAmount - takersQuoteBalancesAmountAfter;
-
-    if (!(takerQuoteBalancesDiff === buyAmount)) {
-        log.error(
-            "Assertion failed: %s != %s",
-            takerQuoteBalancesDiff,
-            buyAmount
-        );
-        throw new Error("Balances mismatch");
-    }
-
-    if (!(takerBaseBalancesDiff === sellAmount)) {
-        log.error(
-            "Assertion failed: %s != %s",
-            takerQuoteBalancesDiff,
-            sellAmount
-        );
-        throw new Error("Balances mismatch");
-    }
-
-}
-
-
-async function getPairBalances(provider: AnchorProvider, market: IMarket, account: Keypair): Promise<Balances> {
-    const mintUtils = new MintUtils(provider.connection, account);
-    const userQuoteAcc = await mintUtils.getOrCreateTokenAccount(
-        market.quoteMint,
-        account,
-        account.publicKey
-    );
-
-    const userBaseAcc = await mintUtils.getOrCreateTokenAccount(
-        market.baseMint,
-        account,
-        account.publicKey
-    );
-
-    return { account: account.publicKey, marketName: market.name, quote: userQuoteAcc.amount, base: userBaseAcc.amount }
 }

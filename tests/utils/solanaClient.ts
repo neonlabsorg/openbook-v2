@@ -1,9 +1,12 @@
-import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL, TransactionMessage } from '@solana/web3.js';
 import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
 import { getRandomName } from "./helpers";
 import config from '../config';
 import { log, retry } from "./helpers";
 import tradingConfig from '../tradingConfig';
+import { AnchorProvider } from '@coral-xyz/anchor';
+import { IMarket, Balances } from "./interfaces";
+import { MintUtils } from "../utils/mintUtils";
 
 export const connection = new Connection(config.RPC, 'confirmed');
 
@@ -15,8 +18,13 @@ export class SolanaClient {
     };
 
     async fundAccount(account: PublicKey, balance: number) {
-        const signature = await connection.requestAirdrop(account, balance * LAMPORTS_PER_SOL);
-        await connection.confirmTransaction(signature);
+        try {
+            const signature = await connection.requestAirdrop(account, balance * LAMPORTS_PER_SOL);
+            await connection.confirmTransaction(signature);
+        } catch (error) {
+            log.error("Error on funding account %s: ", account.toBase58(), error);
+            process.exit(1);
+        }
     }
 
     async getBalance(account: PublicKey) {
@@ -76,5 +84,22 @@ export class SolanaClient {
         const mint = await this.deploySPLToken(payers, decimals);
         log.info("%s token %s with mint %s created", type, name, mint.toBase58());
         return { name, mint };
+    }
+
+    async getPairBalances(provider: AnchorProvider, market: IMarket, account: Keypair): Promise<Balances> {
+        const mintUtils = new MintUtils(provider.connection, account);
+        const userQuoteAcc = await mintUtils.getOrCreateTokenAccount(
+            market.quoteMint,
+            account,
+            account.publicKey
+        );
+
+        const userBaseAcc = await mintUtils.getOrCreateTokenAccount(
+            market.baseMint,
+            account,
+            account.publicKey
+        );
+
+        return { account: account.publicKey, marketName: market.name, quote: userQuoteAcc.amount, base: userBaseAcc.amount }
     }
 }

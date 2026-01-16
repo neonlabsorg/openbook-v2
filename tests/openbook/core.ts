@@ -55,9 +55,9 @@ export class Maker {
         };
     }
 
-    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram) {
+    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram, consumeEventsHistogram: Prometheus.Histogram) {
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].settleFunds(settleFundsCounter, settleFundsHistogram);
+            await this.user.markets[j].settleFunds(settleFundsCounter, settleFundsHistogram, consumeEventsHistogram);
         };
     }
 }
@@ -153,27 +153,40 @@ export class Market {
     }
 
     public async placeOrders(n: number, orderCounter: Prometheus.Counter) {
+        const promises: Promise<{ order: Object; accountIndex: number }>[] = [];
+
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < n; j++) {
                 const id = this.market.openOrderAccounts[i].account.address.toBase58().slice(0, 5) + "_" + i + "_" + j;
-                let order: Object = await placeOrder(
+                const promise = placeOrder(
                     id,
                     this.market.maker.user.account,
                     this.market.address,
                     this.market.openOrderAccounts[i].account.address,
                     this.market.maker.user.client,
                     this.market.maker.user.provider
-                );
-                this.market.openOrderAccounts[i].account.openOrders.push(order);
-                orderCounter.inc(
-                    {
-                        type: "ask",
-                        owner: this.market.maker.user.account.publicKey.toBase58(),
-                        market: this.market.name,
-                        tradingAccount: this.market.openOrderAccounts[i].account.address.toBase58()
-                    }
-                );
+                ).then((order: Object) => {
+                    orderCounter.inc(
+                        {
+                            type: "ask",
+                            owner: this.market.maker.user.account.publicKey.toBase58(),
+                            market: this.market.name,
+                            tradingAccount: this.market.openOrderAccounts[i].account.address.toBase58()
+                        }
+                    );
+                    return { order, accountIndex: i };
+                });
+                promises.push(promise);
             }
+        }
+
+        const results = await Promise.all(promises);
+
+        for (const result of results) {
+            this.market.openOrderAccounts[result.accountIndex].account.openOrders.push(result.order);
+        }
+
+        for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             log.info(
                 "Maker %s: market's %s OpenOrderAcc %s, open orders: ",
                 this.market.maker.user.account.publicKey.toBase58(),
@@ -184,28 +197,35 @@ export class Market {
         }
     }
 
-    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram) {
+    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram, consumeEventsHistogram: Prometheus.Histogram) {
+        const promises: Promise<void>[] = [];
+
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < this.market.openOrderAccounts[i].account.openOrders.length; j++) {
                 const id = this.market.openOrderAccounts[i].account.openOrders[j]["orderPlacedTxSig"].slice(0, 5) + "_" + i + "_" + j;
-                await settleFunds(
+                const promise = settleFunds(
                     id,
                     settleFundsHistogram,
+                    consumeEventsHistogram,
                     this.market.maker.user.account,
                     this.market.maker.user.wallet,
                     this.market.address,
                     this.market.openOrderAccounts[i].account.address,
                     this.market.maker.user.client,
                     this.market.maker.user.provider
-                );
-                settleFundsCounter.inc(
-                    {
-                        owner: this.market.maker.user.account.publicKey.toBase58(),
-                        market: this.market.name
-                    }
-                );
+                ).then(() => {
+                    settleFundsCounter.inc(
+                        {
+                            owner: this.market.maker.user.account.publicKey.toBase58(),
+                            market: this.market.name
+                        }
+                    );
+                });
+                promises.push(promise);
             };
         }
+
+        await Promise.all(promises);
     }
 }
 
