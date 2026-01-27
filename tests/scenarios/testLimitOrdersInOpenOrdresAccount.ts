@@ -56,6 +56,13 @@ const consumeEventsHistogram = new Prometheus.Histogram({
 });
 metrics.registerMetric(consumeEventsHistogram);
 
+const takeOrderHistogram = new Prometheus.Histogram({
+    name: "place_take_order_duration_seconds",
+    help: "time to send take order",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(takeOrderHistogram);
+
 async function runTradingProcess(ordersNumber: number) {
     const solanaClient = new SolanaClient();
     const programId = new PublicKey(config.accounts.programId);
@@ -115,7 +122,7 @@ async function runTradingProcess(ordersNumber: number) {
 
     // taker places its own order to buy 10 base tokens
     for (let i = 0; i < ordersNumber; i++) {
-        await placeTakeOrder(i, takerKeypair, marketAddress, clientTaker, providerTaker);
+        await placeTakeOrder(i, takeOrderHistogram, takerKeypair, marketAddress, clientTaker, providerTaker);
     }
     // execute the deal
     for (let i = 0; i < ordersNumber; i++) {

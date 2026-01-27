@@ -8,8 +8,11 @@ import {
     placeOrder,
     settleFunds
 } from "../openbook/actions";
-import { log } from "../utils/helpers";
+import { log, runWithConcurrencyLimit } from "../utils/helpers";
 import Prometheus from "prom-client";
+
+const MAX_CONCURRENT_SETTLE = 100;
+const MAX_CONCURRENT_ORDERS = 100;
 
 export class Maker {
     public user: IMaker = {
@@ -55,10 +58,21 @@ export class Maker {
         };
     }
 
-    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram, consumeEventsHistogram: Prometheus.Histogram) {
+    public async settleFunds(
+        settleFundsCounter: Prometheus.Counter,
+        settleFundsHistogram: Prometheus.Histogram,
+        consumeEventsHistogram: Prometheus.Histogram
+    ): Promise<string[]> {
+        const allSignatures: string[] = [];
         for (let j = 0; j < this.user.markets.length; j++) {
-            await this.user.markets[j].settleFunds(settleFundsCounter, settleFundsHistogram, consumeEventsHistogram);
-        };
+            const marketSignatures = await this.user.markets[j].settleFunds(
+                settleFundsCounter,
+                settleFundsHistogram,
+                consumeEventsHistogram
+            );
+            allSignatures.push(...marketSignatures);
+        }
+        return allSignatures;
     }
 }
 
@@ -153,34 +167,35 @@ export class Market {
     }
 
     public async placeOrders(n: number, orderCounter: Prometheus.Counter) {
-        const promises: Promise<{ order: Object; accountIndex: number }>[] = [];
+        const tasks: Array<() => Promise<{ order: Object; accountIndex: number }>> = [];
 
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < n; j++) {
                 const id = this.market.openOrderAccounts[i].account.address.toBase58().slice(0, 5) + "_" + i + "_" + j;
-                const promise = placeOrder(
-                    id,
-                    this.market.maker.user.account,
-                    this.market.address,
-                    this.market.openOrderAccounts[i].account.address,
-                    this.market.maker.user.client,
-                    this.market.maker.user.provider
-                ).then((order: Object) => {
-                    orderCounter.inc(
-                        {
-                            type: "ask",
-                            owner: this.market.maker.user.account.publicKey.toBase58(),
-                            market: this.market.name,
-                            tradingAccount: this.market.openOrderAccounts[i].account.address.toBase58()
-                        }
-                    );
-                    return { order, accountIndex: i };
-                });
-                promises.push(promise);
+                tasks.push(() =>
+                    placeOrder(
+                        id,
+                        this.market.maker.user.account,
+                        this.market.address,
+                        this.market.openOrderAccounts[i].account.address,
+                        this.market.maker.user.client,
+                        this.market.maker.user.provider
+                    ).then((order: Object) => {
+                        orderCounter.inc(
+                            {
+                                type: "ask",
+                                owner: this.market.maker.user.account.publicKey.toBase58(),
+                                market: this.market.name,
+                                tradingAccount: this.market.openOrderAccounts[i].account.address.toBase58()
+                            }
+                        );
+                        return { order, accountIndex: i };
+                    })
+                );
             }
         }
 
-        const results = await Promise.all(promises);
+        const results = await runWithConcurrencyLimit(tasks, MAX_CONCURRENT_ORDERS);
 
         for (const result of results) {
             this.market.openOrderAccounts[result.accountIndex].account.openOrders.push(result.order);
@@ -197,35 +212,38 @@ export class Market {
         }
     }
 
-    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram, consumeEventsHistogram: Prometheus.Histogram) {
-        const promises: Promise<void>[] = [];
+    public async settleFunds(settleFundsCounter: Prometheus.Counter, settleFundsHistogram: Prometheus.Histogram, consumeEventsHistogram: Prometheus.Histogram): Promise<string[]> {
+        const tasks: Array<() => Promise<string[]>> = [];
 
         for (let i = 0; i < this.market.openOrderAccounts.length; i++) {
             for (let j = 0; j < this.market.openOrderAccounts[i].account.openOrders.length; j++) {
                 const id = this.market.openOrderAccounts[i].account.openOrders[j]["orderPlacedTxSig"].slice(0, 5) + "_" + i + "_" + j;
-                const promise = settleFunds(
-                    id,
-                    settleFundsHistogram,
-                    consumeEventsHistogram,
-                    this.market.maker.user.account,
-                    this.market.maker.user.wallet,
-                    this.market.address,
-                    this.market.openOrderAccounts[i].account.address,
-                    this.market.maker.user.client,
-                    this.market.maker.user.provider
-                ).then(() => {
-                    settleFundsCounter.inc(
-                        {
-                            owner: this.market.maker.user.account.publicKey.toBase58(),
-                            market: this.market.name
-                        }
-                    );
-                });
-                promises.push(promise);
-            };
+                tasks.push(() =>
+                    settleFunds(
+                        id,
+                        settleFundsHistogram,
+                        consumeEventsHistogram,
+                        this.market.maker.user.account,
+                        this.market.maker.user.wallet,
+                        this.market.address,
+                        this.market.openOrderAccounts[i].account.address,
+                        this.market.maker.user.client,
+                        this.market.maker.user.provider
+                    ).then((signatures: string[]) => {
+                        settleFundsCounter.inc(
+                            {
+                                owner: this.market.maker.user.account.publicKey.toBase58(),
+                                market: this.market.name
+                            }
+                        );
+                        return signatures;
+                    })
+                );
+            }
         }
 
-        await Promise.all(promises);
+        const results = await runWithConcurrencyLimit(tasks, MAX_CONCURRENT_SETTLE);
+        return results.flat();
     }
 }
 

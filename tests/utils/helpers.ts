@@ -35,3 +35,28 @@ export async function retry<T extends (...args: any[]) => any>(
         return retry(fn, args, maxRetry, label, current + 1);
     }
 }
+
+export async function runWithConcurrencyLimit<T>(
+    tasks: Array<() => Promise<T>>,
+    limit: number
+): Promise<T[]> {
+    const results: T[] = new Array(tasks.length);
+    let index = 0;
+
+    async function worker() {
+        while (true) {
+            const current = index++;
+            if (current >= tasks.length) break;
+            results[current] = await tasks[current]();
+        }
+    }
+
+    const workers: Promise<void>[] = [];
+    const workerCount = Math.min(limit, tasks.length);
+    for (let i = 0; i < workerCount; i++) {
+        workers.push(worker());
+    }
+
+    await Promise.all(workers);
+    return results;
+}

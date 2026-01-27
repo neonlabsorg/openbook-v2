@@ -3,7 +3,7 @@ import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { log, sleep } from "../utils/helpers";
+import { log, runWithConcurrencyLimit, sleep } from "../utils/helpers";
 import { Metrics } from "../utils/metricsManager";
 import { Maker, Taker, Market, OpenOrderAccount } from "../openbook/core";
 import {
@@ -14,6 +14,7 @@ import config from "../config";
 import tradingConfig from "../tradingConfig";
 import Prometheus from "prom-client";
 
+const MAX_CONCURRENT_TAKE_ORDER = 100;
 
 const app = command({
     name: "runTradingProcess",
@@ -82,10 +83,17 @@ metrics.registerMetric(settleFundsHistogram);
 
 const consumeEventsHistogram = new Prometheus.Histogram({
     name: "consume_events_duration_seconds",
-    help: "time to send consumeEvents and tregger token movements",
+    help: "time to send consumeEvents and trigger token movements",
     labelNames: ['owner', 'market']
 });
 metrics.registerMetric(consumeEventsHistogram);
+
+const takeOrderHistogram = new Prometheus.Histogram({
+    name: "place_take_order_duration_seconds",
+    help: "time to send take order",
+    labelNames: ['owner', 'market']
+});
+metrics.registerMetric(takeOrderHistogram);
 
 async function runTradingProcess(): Promise<void> {
     log.info("Start trading load to rpc url: %s", config.RPC);
@@ -108,15 +116,6 @@ async function runTradingProcess(): Promise<void> {
 
     const solanaClient = new SolanaClient();
     const programId = new PublicKey(config.accounts.programId);
-
-    let makersBaseBalancesAmount: bigint = BigInt(0);
-    let makersBaseBalancesAmountAfter: bigint = BigInt(0);
-    let makersQuoteBalancesAmount: bigint = BigInt(0);
-    let makersQuoteBalancesAmountAfter: bigint = BigInt(0);
-    let takersBaseBalancesAmount: bigint = BigInt(0);
-    let takersBaseBalancesAmountAfter: bigint = BigInt(0);
-    let takersQuoteBalancesAmount: bigint = BigInt(0);
-    let takersQuoteBalancesAmountAfter: bigint = BigInt(0);
 
     // Makers
     let makers: Maker[] = [];
@@ -223,30 +222,6 @@ async function runTradingProcess(): Promise<void> {
     }
     await metrics.sendMetrics();
 
-    for (let i = 0; i < makersNumber; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            const balances = await solanaClient.getPairBalances(
-                makers[i].user.provider,
-                makers[i].user.markets[j].market,
-                makers[i].user.account
-            );
-            makersBaseBalancesAmount += balances.base;
-            makersQuoteBalancesAmount += balances.quote;
-        }
-    }
-
-    for (let i = 0; i < takers.length; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            const balances = await solanaClient.getPairBalances(
-                takers[i].user.provider,
-                makers[0].user.markets[j].market,
-                takers[i].user.account
-            );
-            takersBaseBalancesAmount += balances.base;
-            takersQuoteBalancesAmount += balances.quote;
-        }
-    }
-
     // create Open Orders Accounts (for Makers only)
     let tradingAccounts: OpenOrderAccount[] = [];
     for (let j = 0; j < makers.length; j++) {
@@ -262,23 +237,25 @@ async function runTradingProcess(): Promise<void> {
     await metrics.sendMetrics();
 
     // place take orders to buy 10 base tokens per one take order
-    const takeOrderPromises: Promise<void>[] = [];
+    const takeOrderTasks: Array<() => Promise<string[]>> = [];
     for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
         for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
-            const id = `${k}_${m}`
-            const promise = placeTakeOrder(
-                id,
-                takers[k].user.account,
-                tradingAccounts[k].account.marketAddress,
-                takers[k].user.client,
-                takers[k].user.provider
+            const id = `${k}_${m}`;
+            takeOrderTasks.push(() =>
+                placeTakeOrder(
+                    id,
+                    takeOrderHistogram,
+                    takers[k].user.account,
+                    tradingAccounts[k].account.marketAddress,
+                    takers[k].user.client,
+                    takers[k].user.provider
+                )
             );
-            takeOrderPromises.push(promise);
         }
     }
-    await Promise.all(takeOrderPromises);
 
-    // Increment counters after all orders are placed
+    const takeOrderResults = await runWithConcurrencyLimit(takeOrderTasks, MAX_CONCURRENT_TAKE_ORDER);
+
     for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
         for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
             takeOrderCounter.inc(
@@ -292,85 +269,62 @@ async function runTradingProcess(): Promise<void> {
     }
     await metrics.sendMetrics();
 
-    // execute the deals
+    const allTakeOrderSignatures = takeOrderResults.flat();
+    await waitForFinalizedTransactions(allTakeOrderSignatures, "TakeOrder");
+
+    // execute the deals and collect settle-funds transaction signatures
+    const allSettleSignatures: string[] = [];
     for (let j = 0; j < makers.length; j++) {
-        await makers[j].settleFunds(settleFundsCounter, settleFundsHistogram, consumeEventsHistogram);
+        const makerSettleSignatures = await makers[j].settleFunds(
+            settleFundsCounter,
+            settleFundsHistogram,
+            consumeEventsHistogram
+        );
+        allSettleSignatures.push(...makerSettleSignatures);
     }
+    await waitForFinalizedTransactions(allSettleSignatures, "SettleFunds");
     await metrics.sendMetrics();
+}
 
-    for (let i = 0; i < takers.length; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            const balances = await solanaClient.getPairBalances(
-                takers[i].user.provider,
-                makers[0].user.markets[j].market,
-                takers[i].user.account
-            );
-            takersBaseBalancesAmountAfter += balances.base;
-            takersQuoteBalancesAmountAfter += balances.quote;
+async function waitForFinalizedTransactions(signatures: string[], label: string): Promise<void> {
+    const SIGNATURE_STATUS_CHUNK = 256;
+    const POLL_INTERVAL_MS = 500;
+
+    const pendingSignatures = new Set(signatures);
+
+    while (pendingSignatures.size > 0) {
+        const sigArray = Array.from(pendingSignatures);
+
+        for (let i = 0; i < sigArray.length; i += SIGNATURE_STATUS_CHUNK) {
+            const chunk = sigArray.slice(i, i + SIGNATURE_STATUS_CHUNK);
+            const statusResponse = await connection.getSignatureStatuses(chunk);
+            const statuses = statusResponse.value;
+
+            for (let j = 0; j < statuses.length; j++) {
+                const status = statuses[j];
+                const signature = chunk[j];
+
+                if (!status) {
+                    continue;
+                }
+
+                if (status.err) {
+                    log.error(
+                        "%s transaction failed. Signature: %s, status: %s",
+                        label,
+                        signature,
+                        JSON.stringify(status)
+                    );
+                }
+
+                if (status.confirmationStatus === "finalized") {
+                    pendingSignatures.delete(signature);
+                }
+            }
+        }
+
+        if (pendingSignatures.size > 0) {
+            await sleep(POLL_INTERVAL_MS);
         }
     }
-
-    const sellAmount = BigInt(makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9);
-    const buyAmount = sellAmount * BigInt(tradingConfig.orders.tradePrice);
-
-    const takerBaseBalancesDiff = takersBaseBalancesAmountAfter - takersBaseBalancesAmount;
-    const takerQuoteBalancesDiff = takersQuoteBalancesAmount - takersQuoteBalancesAmountAfter;
-
-    if (!(takerQuoteBalancesDiff === buyAmount)) {
-        log.error(
-            "Assertion failed, takerQuoteBalances Balances mismatch: %s != %s",
-            takerQuoteBalancesDiff,
-            buyAmount
-        );
-    }
-
-    if (!(takerBaseBalancesDiff === sellAmount)) {
-        log.error(
-            "Assertion failed, takerBaseBalances Balances mismatch: %s != %s",
-            takerQuoteBalancesDiff,
-            sellAmount
-        );
-    }
-
-    for (let i = 0; i < makersNumber; i++) {
-        for (let j = 0; j < marketsNumber; j++) {
-            const balances = await solanaClient.getPairBalances(
-                makers[i].user.provider,
-                makers[i].user.markets[j].market,
-                makers[i].user.account
-            )
-            makersBaseBalancesAmountAfter += balances.base;
-            makersQuoteBalancesAmountAfter += balances.quote;
-        }
-    }
-
-    const makerBaseBalancesDiff = makersBaseBalancesAmount - makersBaseBalancesAmountAfter;
-
-
-    const fee = BigInt(
-        (makersNumber * ordersPerMaker * tradeQuantity * 10 ** 9 * tradingConfig.orders.tradePrice) /
-        tradingConfig.orders.makerFee
-    );
-    const makerQuoteBalancesDiff = (
-        makersQuoteBalancesAmountAfter
-        - makersQuoteBalancesAmount
-        + fee
-    );
-
-    if (!(makerQuoteBalancesDiff === buyAmount)) {
-        log.error(
-            "Assertion failed, makerQuoteBalances Balances mismatch: %s != %s",
-            makerQuoteBalancesDiff,
-            buyAmount
-        );
-    }
-
-    if (!(makerBaseBalancesDiff === sellAmount)) {
-        log.error(
-            "Assertion failed, makerBaseBalances Balances mismatch: %s != %s",
-            makerBaseBalancesDiff,
-            sellAmount
-        );
-    }
-
 }

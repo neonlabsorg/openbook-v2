@@ -161,11 +161,12 @@ export async function placeOrder(
 
 export async function placeTakeOrder(
     id: string | number,
+    takeOrderHistogram: Prometheus.Histogram,
     takerKeypair: Keypair,
     marketAddress: PublicKey,
     openbookClient: OpenBookV2Client,
     provider: AnchorProvider
-): Promise<void> {
+): Promise<string[]> {
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const mintUtils = new MintUtils(provider.connection, takerKeypair);
@@ -204,13 +205,20 @@ export async function placeTakeOrder(
         remainings
     );
 
+    const signatures: string[] = [];
+
     try {
-        const sig = await await openbookClient.sendAndConfirmTransaction([ix], signers);
+        const end = takeOrderHistogram.startTimer();
+        const sig = await openbookClient.sendAndConfirmTransaction([ix], signers);
+        end();
         log.info("[id_%s] TakeOrder placed. Tx signature: %s", id, sig);
+        signatures.push(sig);
     } catch (error) {
         log.error("Error fetching TakeOrder: ", error);
         process.exit(1);
     }
+
+    return signatures;
 }
 
 export async function settleFunds(
@@ -223,7 +231,7 @@ export async function settleFunds(
     openOrdersAccount: PublicKey,
     openbookClient: OpenBookV2Client,
     provider: AnchorProvider
-): Promise<void> {
+): Promise<string[]> {
     const market = await openbookClient.program.account.market.fetch(marketAddress);
 
     const consumeEventsIx = await openbookClient.consumeEventsIx(
@@ -269,15 +277,20 @@ export async function settleFunds(
         makerWallet.publicKey
     );
 
+    const signatures: string[] = [];
+
     try {
         const end = settleFunds.startTimer();
         const sig = await openbookClient.sendAndConfirmTransaction([ix], { additionalSigners: signers });
         end();
         log.info("[id_%s] SettleFunds tx sig: %s", id, sig);
+        signatures.push(sig);
     } catch (error) {
         log.error("Error fetching SettleFunds: ", error);
         process.exit(1);
     }
+
+    return signatures;
 }
 
 export async function getMarkets(
