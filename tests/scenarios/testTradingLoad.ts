@@ -2,8 +2,13 @@ import { command, run } from "cmd-ts";
 import { SolanaClient, connection } from "../utils/solanaClient";
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { Keypair, PublicKey } from "@solana/web3.js";
+import type { Commitment } from "@solana/web3.js";
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { log, runWithConcurrencyLimit, sleep } from "../utils/helpers";
+import {
+    log,
+    runWithConcurrencyLimit,
+    waitForSuccessfulTxs
+} from "../utils/helpers";
 import { Metrics } from "../utils/metricsManager";
 import { Maker, Taker, Market, OpenOrderAccount } from "../openbook/core";
 import {
@@ -14,7 +19,6 @@ import config from "../config";
 import tradingConfig from "../tradingConfig";
 import Prometheus from "prom-client";
 
-const MAX_CONCURRENT_TAKE_ORDER = 100;
 
 const app = command({
     name: "runTradingProcess",
@@ -98,6 +102,8 @@ metrics.registerMetric(takeOrderHistogram);
 async function runTradingProcess(): Promise<void> {
     log.info("Start trading load to rpc url: %s", config.RPC);
     log.info("OpenbookV2 program_id: %s", config.accounts.programId);
+    const COMMITMENT: Commitment = "finalized";
+
     const ordersNumberPerOpenOrderAccount = tradingConfig.common.ordersPerTradingAccount;
     const openOrderAccountsNumber = tradingConfig.common.tradingAccountsPerMakersMarket;
     const makersNumber = tradingConfig.common.makers;
@@ -140,7 +146,7 @@ async function runTradingProcess(): Promise<void> {
         let maker = new Maker();
         maker.setAccount(makerAccounts[i]);
         maker.setWallet(new Wallet(maker.user.account));
-        maker.setProvider(new AnchorProvider(connection, maker.user.wallet, { commitment: "confirmed" }));
+        maker.setProvider(new AnchorProvider(connection, maker.user.wallet, { commitment: COMMITMENT}));
         maker.setClient(new OpenBookV2Client(maker.user.provider, programId));
 
         log.info("[id_%s] Maker: %s", i, maker.user.account.publicKey.toBase58());
@@ -166,7 +172,7 @@ async function runTradingProcess(): Promise<void> {
         let taker = new Taker();
         taker.setAccount(accounts[i]);
         taker.setWallet(new Wallet(taker.user.account));
-        taker.setProvider(new AnchorProvider(connection, taker.user.wallet, { commitment: "confirmed" }))
+        taker.setProvider(new AnchorProvider(connection, taker.user.wallet, { commitment: COMMITMENT }))
         taker.setClient(new OpenBookV2Client(taker.user.provider, programId))
         log.info("[id_%s] Taker: %s", i, taker.user.account.publicKey.toBase58());
         takers.push(taker);
@@ -254,7 +260,8 @@ async function runTradingProcess(): Promise<void> {
         }
     }
 
-    const takeOrderResults = await runWithConcurrencyLimit(takeOrderTasks, MAX_CONCURRENT_TAKE_ORDER);
+    const takeOrderResults = await runWithConcurrencyLimit(takeOrderTasks, tradingConfig.testRun.maxConcurrency);
+    await waitForSuccessfulTxs(takeOrderResults.flat(), COMMITMENT, "PlaceTakeOrders");
 
     for (let k = 0; k < openOrderAccountsNumber * makersNumber * marketsNumber; k++) {
         for (let m = 0; m < ordersNumberPerOpenOrderAccount; m++) {
@@ -269,9 +276,6 @@ async function runTradingProcess(): Promise<void> {
     }
     await metrics.sendMetrics();
 
-    const allTakeOrderSignatures = takeOrderResults.flat();
-    await waitForFinalizedTransactions(allTakeOrderSignatures, "TakeOrder");
-
     // execute the deals and collect settle-funds transaction signatures
     const allSettleSignatures: string[] = [];
     for (let j = 0; j < makers.length; j++) {
@@ -282,49 +286,6 @@ async function runTradingProcess(): Promise<void> {
         );
         allSettleSignatures.push(...makerSettleSignatures);
     }
-    await waitForFinalizedTransactions(allSettleSignatures, "SettleFunds");
+    await waitForSuccessfulTxs(allSettleSignatures, COMMITMENT, "SettleFunds");
     await metrics.sendMetrics();
-}
-
-async function waitForFinalizedTransactions(signatures: string[], label: string): Promise<void> {
-    const SIGNATURE_STATUS_CHUNK = 256;
-    const POLL_INTERVAL_MS = 500;
-
-    const pendingSignatures = new Set(signatures);
-
-    while (pendingSignatures.size > 0) {
-        const sigArray = Array.from(pendingSignatures);
-
-        for (let i = 0; i < sigArray.length; i += SIGNATURE_STATUS_CHUNK) {
-            const chunk = sigArray.slice(i, i + SIGNATURE_STATUS_CHUNK);
-            const statusResponse = await connection.getSignatureStatuses(chunk);
-            const statuses = statusResponse.value;
-
-            for (let j = 0; j < statuses.length; j++) {
-                const status = statuses[j];
-                const signature = chunk[j];
-
-                if (!status) {
-                    continue;
-                }
-
-                if (status.err) {
-                    log.error(
-                        "%s transaction failed. Signature: %s, status: %s",
-                        label,
-                        signature,
-                        JSON.stringify(status)
-                    );
-                }
-
-                if (status.confirmationStatus === "finalized") {
-                    pendingSignatures.delete(signature);
-                }
-            }
-        }
-
-        if (pendingSignatures.size > 0) {
-            await sleep(POLL_INTERVAL_MS);
-        }
-    }
 }

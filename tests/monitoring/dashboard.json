@@ -843,6 +843,18 @@
           "legendFormat": "95%tile",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "builder",
+          "expr": "histogram_quantile(0.5, consume_events_duration_seconds_bucket{instance=\"host.docker.internal:8080\"})",
+          "hide": false,
+          "legendFormat": "50%tile",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Consume Events Tima",
@@ -980,6 +992,18 @@
           "legendFormat": "95%tile ",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "builder",
+          "expr": "histogram_quantile(0.5, place_take_order_duration_seconds_bucket{instance=\"host.docker.internal:8080\"})",
+          "hide": false,
+          "legendFormat": "50%tile ",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Place Take Order Time",
@@ -1117,6 +1141,18 @@
           "legendFormat": "95%tile",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "builder",
+          "expr": "histogram_quantile(0.5, settle_funds_duration_seconds_bucket{instance=\"host.docker.internal:8080\"})",
+          "hide": false,
+          "legendFormat": "50%tile",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "Settle Funds Time",
@@ -1131,12 +1167,12 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "OpenbookV2",
   "uid": "gzcr4v",
-  "version": 16
+  "version": 25
 }

@@ -10,9 +10,7 @@ import {
 } from "../openbook/actions";
 import { log, runWithConcurrencyLimit } from "../utils/helpers";
 import Prometheus from "prom-client";
-
-const MAX_CONCURRENT_SETTLE = 100;
-const MAX_CONCURRENT_ORDERS = 100;
+import tradingConfig from "../tradingConfig";
 
 export class Maker {
     public user: IMaker = {
@@ -195,7 +193,7 @@ export class Market {
             }
         }
 
-        const results = await runWithConcurrencyLimit(tasks, MAX_CONCURRENT_ORDERS);
+        const results = await runWithConcurrencyLimit(tasks, tradingConfig.testRun.maxConcurrency);
 
         for (const result of results) {
             this.market.openOrderAccounts[result.accountIndex].account.openOrders.push(result.order);
@@ -242,7 +240,7 @@ export class Market {
             }
         }
 
-        const results = await runWithConcurrencyLimit(tasks, MAX_CONCURRENT_SETTLE);
+        const results = await runWithConcurrencyLimit(tasks, tradingConfig.testRun.maxConcurrency);
         return results.flat();
     }
 }

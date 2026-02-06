@@ -1,5 +1,5 @@
 import { BN } from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey, TransactionMessage } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { OpenBookV2Client } from "@openbook-dex/openbook-v2";
 import { MintUtils } from "../utils/mintUtils";
@@ -186,7 +186,7 @@ export async function placeTakeOrder(
         side: SideUtils.Bid,  // BUYING base token
         priceLots: uiPriceToLots(market, 30),  // Willing to pay up to $30
         maxBaseLots: uiBaseToLots(market, quantity),  // Buying 10 base tokens
-        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 100 * quantity),  // Max $350 spend
+        maxQuoteLotsIncludingFees: uiQuoteToLots(market, 100 * quantity),
         clientOrderId: new BN(Date.now()),
         orderType: PlaceOrderTypeUtils.Market,
         expiryTimestamp: new BN(0),

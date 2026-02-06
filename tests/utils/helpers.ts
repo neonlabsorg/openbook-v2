@@ -60,3 +60,49 @@ export async function runWithConcurrencyLimit<T>(
     await Promise.all(workers);
     return results;
 }
+
+import { connection } from "./solanaClient"
+import type { Commitment } from "@solana/web3.js";
+
+export async function waitForSuccessfulTxs(signatures: string[], commitment: Commitment, label: string): Promise<void> {
+    const SIGNATURE_STATUS_CHUNK = 256;
+    const POLL_INTERVAL_MS = 500;
+
+    const pendingSignatures = new Set(signatures);
+
+    while (pendingSignatures.size > 0) {
+        const sigArray = Array.from(pendingSignatures);
+
+        for (let i = 0; i < sigArray.length; i += SIGNATURE_STATUS_CHUNK) {
+            const chunk = sigArray.slice(i, i + SIGNATURE_STATUS_CHUNK);
+            const statusResponse = await connection.getSignatureStatuses(chunk);
+            const statuses = statusResponse.value;
+
+            for (let j = 0; j < statuses.length; j++) {
+                const status = statuses[j];
+                const signature = chunk[j];
+
+                if (!status) {
+                    continue;
+                }
+
+                if (status.err) {
+                    log.error(
+                        "%s transaction failed. Signature: %s, status: %s",
+                        label,
+                        signature,
+                        JSON.stringify(status)
+                    );
+                }
+
+                if (status.confirmationStatus === commitment) {
+                    pendingSignatures.delete(signature);
+                }
+            }
+        }
+
+        if (pendingSignatures.size > 0) {
+            await sleep(POLL_INTERVAL_MS);
+        }
+    }
+}

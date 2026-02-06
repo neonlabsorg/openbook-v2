@@ -1,5 +1,21 @@
-import { Connection, PublicKey, Keypair, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL, TransactionMessage } from '@solana/web3.js';
-import { createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddress, createMint } from "@solana/spl-token";
+import {
+    Connection,
+    PublicKey,
+    Keypair,
+    Transaction,
+    sendAndConfirmTransaction,
+    LAMPORTS_PER_SOL,
+    Commitment,
+    ConnectionConfig
+} from '@solana/web3.js';
+
+import {
+    createAssociatedTokenAccountInstruction,
+    createMintToInstruction,
+    getAssociatedTokenAddress,
+    createMint
+} from "@solana/spl-token";
+
 import { getRandomName } from "./helpers";
 import config from '../config';
 import { log, retry } from "./helpers";
@@ -7,8 +23,22 @@ import tradingConfig from '../tradingConfig';
 import { AnchorProvider } from '@coral-xyz/anchor';
 import { IMarket, Balances } from "./interfaces";
 import { MintUtils } from "../utils/mintUtils";
+import http from "http";
+import https from "https";
 
-export const connection = new Connection(config.RPC, 'confirmed');
+const commitment: Commitment = "confirmed";
+
+const httpAgent =
+    config.RPC.startsWith("https://")
+        ? new https.Agent({ keepAlive: true })
+        : new http.Agent({ keepAlive: true });
+
+const connectionConfig: ConnectionConfig = {
+    commitment,
+    httpAgent,
+};
+
+export const connection = new Connection(config.RPC, connectionConfig);
 
 export class SolanaClient {
     async createAccountWithBalance(balance: number = tradingConfig.consts.initialAccountBalance): Promise<Keypair> {

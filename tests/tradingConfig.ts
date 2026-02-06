@@ -4,7 +4,10 @@ const tradingConfig = {
         markets: 2, //number of trading pairs per Maker
         tradingAccountsPerMakersMarket: 5, // number of OpenOrdersAccount per each Maker
         ordersPerTradingAccount: 10, // number of orders per each Trading account, range [0, 24]
+    },
+    testRun: {
         ordersDistributionStrategy: "HalfSellHalfBuy", // number of orders with side ask = all order's number / 2, number of orders with side bid = all order's number / 2
+        maxConcurrency: 100,
     },
     consts: {
         initialAccountBalance: 4, // SOLs
